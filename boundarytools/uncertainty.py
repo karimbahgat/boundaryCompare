@@ -200,12 +200,13 @@ class Boundary(object):
         kernel_center = {'type':'Point', 'coordinates':[0,0]}
         kernel_footprint = Boundary(kernel_center, self.precision, self.precision_range_max)
         kernel_bbox = [0,0,maxdist,maxdist]
-        distgrid = kernel_footprint.distance_surface(resolution, kernel_bbox, boundary=True)
-        kernel = np.array(distgrid)
+        #cornersurf = kernel_footprint.distance_surface(resolution, kernel_bbox, boundary=True)
+        cornersurf = kernel_footprint.precision_surface(resolution, kernel_bbox, maxdist)
+        cornerkernel = np.array(cornersurf)
 
         # expand kernel to all four quadrants
-        if kernel.shape[0] > 1:
-            bottom_right = kernel
+        if cornerkernel.shape[0] > 1:
+            bottom_right = cornerkernel
             #print('quad',bottom_right)
             bottom_left = np.fliplr(bottom_right[:,1:]) # minus the kernel center
             bottom = np.concatenate([bottom_left, bottom_right], axis=1)
@@ -216,8 +217,9 @@ class Boundary(object):
         ###print('kernel footprint',resolution,kernel_bbox,kernel.shape)
 
         # normalize so whole distribution sums to 1? 
-        summ = kernel.sum()
-        kernel = kernel / summ
+        #summ = kernel.sum()
+        #kernel = kernel / summ
+        #print('kernel',kernel)
         
         return kernel
 
@@ -230,7 +232,9 @@ class Boundary(object):
         distgrid = self.distance_surface(resolution, bbox, boundary=True, maxdist=maxdist)
 
         # eval accuracy equation of the distance grid
-        outgrid = eval(self.precision, {}, {'x':distgrid})
+        context = {'sqrt':np.sqrt, 'pi':np.pi, 'exp': np.exp}
+        context['x'] = distgrid
+        outgrid = eval(self.precision, {}, context)
 
         # clamp to 0-1
         outgrid = np.minimum(outgrid, 1)
@@ -269,6 +273,11 @@ class Boundary(object):
         inside_surf = np.array(inside)
         precision_kernel = self.precision_kernel(resolution, maxdist=maxdist)
 
+        # normalize so whole kernel distribution sums to 1? 
+        summ = precision_kernel.sum()
+        precision_kernel = precision_kernel / summ
+        precision_kernel = precision_kernel / 255.0 # not sure why this is needed or if it truly works...
+
         kernel_offset = (precision_kernel.shape[0] - 1) // 2
 
         # convolve kernel over inside surface
@@ -288,6 +297,7 @@ class Boundary(object):
                     b2 = weighted_kernel
                     #print('b1',b1.shape)
                     #print('b2',b2.shape)
+
                     pos_v, pos_h = y-kernel_offset,x-kernel_offset
                     v_range1 = slice(max(0, pos_v), max(min(pos_v + b2.shape[0], b1.shape[0]), 0))
                     h_range1 = slice(max(0, pos_h), max(min(pos_h + b2.shape[1], b1.shape[1]), 0))
@@ -297,7 +307,7 @@ class Boundary(object):
 
                     b1[v_range1, h_range1] += b2[v_range2, h_range2]
 
-                    #output[y-kernel_offset:y+kernel_offset, x-kernel_offset:x+kernel_offset] += weighted_kernel.flatten()
+                    #output[y-kernel_offset-1:y+kernel_offset, x-kernel_offset-1:x+kernel_offset] += weighted_kernel #.flatten()
 
         def convolute2(output=output):
             # faster version: iterate only the kernel values, apply to entire image with offsets
@@ -368,6 +378,8 @@ class Boundary(object):
         # show
         plt.colorbar()
         plt.show()
+
+
 
 
 
