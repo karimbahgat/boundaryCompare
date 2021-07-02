@@ -223,12 +223,14 @@ class Boundary(object):
         
         return kernel
 
-    def precision_surface(self, resolution, bbox, maxdist):
+    def precision_surface(self, resolution, bbox=None, maxdist=None):
         '''Generates distretized 2D accuracy matrix at a given resolution,
         representing the membership of binary yes/no overlap at each point.
         NOTE: BEWARE OF ALIASING EFFECT IF THE BBOX DONT FALL EXACTLY ON THE GEOM...
         '''
         # create distance grid
+        maxdist = maxdist or self.precision_range_max
+        bbox = bbox or self.bbox(maxdist)
         distgrid = self.distance_surface(resolution, bbox, boundary=True, maxdist=maxdist)
 
         # eval accuracy equation of the distance grid
@@ -242,7 +244,10 @@ class Boundary(object):
             
         return outgrid
 
-    def uncertainty_surface(self, resolution, bbox, maxdist):
+    def uncertainty_surface(self, resolution, bbox=None, maxdist=None):
+        maxdist = maxdist or self.precision_range_max
+        bbox = bbox or self.bbox(maxdist)
+
         # get coord to pixel drawing transform
         xscale,xskew,xoff = resolution,0,bbox[0]-resolution # 1 pixel padding on each side
         yskew,yscale,yoff = 0,resolution,bbox[1]-resolution # 1 pixel padding on each side
@@ -376,10 +381,118 @@ class Boundary(object):
             x,y = zip(*ring)
             plt.plot(x, y, color='black')
         # show
-        plt.colorbar()
+        if surf is not None:
+            plt.colorbar()
         plt.show()
 
+    #################
 
+    def uncertainty_bbox(self):
+        if not hasattr(self, '_uncertainty_bbox'):
+            bbox = self.bbox(self.precision_range_max)
+            self._uncertainty_bbox = list(bbox)
+        return self._uncertainty_bbox
 
+    def bbox_intersection(self, other):
+        bbox1 = self.uncertainty_bbox()
+        bbox2 = other.uncertainty_bbox()
 
+        if bbox2[0] <= bbox1[2] and bbox2[2] >= bbox1[0] and bbox2[1] <= bbox1[3] and bbox2[3] >= bbox1[1]:
+            xmin =  max(bbox1[0],bbox2[0])
+            ymin =  max(bbox1[1],bbox2[1])
+            xmax =  min(bbox1[2],bbox2[2])
+            ymax =  min(bbox1[3],bbox2[3])
+            isec_bbox = xmin,ymin,xmax,ymax
+            return isec_bbox
+
+    def bbox_union(self, other):
+        bbox1 = self.uncertainty_bbox()
+        bbox2 = other.uncertainty_bbox()
+        # get combined bbox
+        xmin =  min(bbox1[0],bbox2[0])
+        ymin =  min(bbox1[1],bbox2[1])
+        xmax =  max(bbox1[2],bbox2[2])
+        ymax =  max(bbox1[3],bbox2[3])
+        return xmin,ymin,xmax,ymax
+
+    def overlap_surface(self, other, resolution=None, bbox=None):
+        if not bbox:
+            bbox = self.bbox_union(other)
+        if not resolution:
+            dx = bbox[2]-bbox[0]
+            dy = bbox[3]-bbox[1]
+            import math
+            diag = math.hypot(dx, dy)
+            resolution = diag / 300.0
+
+        ###print('surf1')
+        surf1 = self.uncertainty_surface(resolution, bbox)
+        ###print('surf2')
+        surf2 = other.uncertainty_surface(resolution, bbox)
+        #print('surf1')#,surf1.shape,surf1)
+        #print('surf2')#,surf2.shape,surf2)
+
+        import numpy as np
+        ###print('fuzzy_min',surf1.shape,surf2.shape)
+        fuzzy_min = np.minimum(surf1, surf2)
+        #print('fuzzy_min',fuzzy_min.shape)#,fuzzy_min)
+        return surf1,surf2,fuzzy_min
+
+    def difference_surface(self, other, resolution=None, bbox=None):
+        if not bbox:
+            bbox = self.bbox_union(other)
+        if not resolution:
+            dx = bbox[2]-bbox[0]
+            dy = bbox[3]-bbox[1]
+            import math
+            diag = math.hypot(dx, dy)
+            resolution = diag / 300.0
+
+        print('surf1')
+        surf1 = self.uncertainty_surface(resolution, bbox)
+        print('surf2')
+        surf2 = other.uncertainty_surface(resolution, bbox)
+        #print('surf1')#,surf1.shape,surf1)
+        #print('surf2')#,surf2.shape,surf2)
+
+        import numpy as np
+        print('fuzzy_min',surf1.shape,surf2.shape)
+        fuzzy_diff = abs(surf1 - surf2)
+        #print('fuzzy_min',fuzzy_min.shape)#,fuzzy_min)
+        return surf1,surf2,fuzzy_diff
+
+    def similarity(self, other, resolution=None, bbox=None):
+        bbox1 = self.uncertainty_bbox()
+        bbox2 = other.uncertainty_bbox()
+        xmin1,ymin1,xmax1,ymax1 = bbox1
+        xmin2,ymin2,xmax2,ymax2 = bbox2
+        boxoverlap = (xmin1 <= xmax2 and xmax1 >= xmin2 and ymin1 <= ymax2 and ymax1 >= ymin2)
+        if not boxoverlap:
+            return {'equality':0, 'within':0, 'contains':0}
+        
+        if not bbox:
+            bbox = self.bbox_union(other)
+        if not resolution:
+            dx = bbox[2]-bbox[0]
+            dy = bbox[3]-bbox[1]
+            import math
+            diag = math.hypot(dx, dy)
+            resolution = diag / 300.0
+
+        surf1,surf2,fuzzy_min = self.overlap_surface(other, resolution, bbox)
+        #from PIL import Image
+        #Image.fromarray((surf1/surf1.max()*255).astype('uint8')).resize((1000,1000)).show()
+        #Image.fromarray((surf2/surf2.max()*255).astype('uint8')).resize((1000,1000)).show()
+        #Image.fromarray((fuzzy_min/fuzzy_min.max()*255).astype('uint8')).resize((1000,1000)).show()
+
+        import numpy as np
+        similarity = {}
+
+        fuzzy_max = np.maximum(surf1, surf2)
+        fuzzy_min_sum = fuzzy_min.sum()
+        similarity['equality'] = float( fuzzy_min_sum / fuzzy_max.sum() )
+        similarity['within'] = float( fuzzy_min_sum / surf1.sum() )
+        similarity['contains'] = float( fuzzy_min_sum / surf2.sum() )
+        
+        return similarity
 
