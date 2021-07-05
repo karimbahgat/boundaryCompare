@@ -95,7 +95,7 @@ import numpy as np
 def topo2geoj(data):
     lyr = list(data['objects'].keys())[0]
     tfeatures = data['objects'][lyr]['geometries']
-    data['arcs'] = [np.array(arc) for arc in data['arcs']] # geometry() assumes np arrays
+    data['arcs'] = [np.array(arc) for arc in data['arcs']] # topojson.utils.geometry() assumes np arrays
     geoj = {'type': "FeatureCollection", 'features': []}
     for tfeat in tfeatures:
         #print(tfeat['type'], tfeat['properties']) #, tfeat['arcs']) 

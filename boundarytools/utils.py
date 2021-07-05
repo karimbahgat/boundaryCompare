@@ -11,6 +11,21 @@ def iter_rings(geoj):
             for ring in poly:
                 yield ring
 
+def topo2geoj(data):
+    '''Data is the toplevel topojson dict containing: type, objects, arcs'''
+    from topojson.utils import geometry
+    lyr = list(data['objects'].keys())[0]
+    tfeatures = data['objects'][lyr]['geometries']
+    data['arcs'] = [np.array(arc) for arc in data['arcs']] # topojson.utils.geometry() assumes np arrays
+    geoj = {'type': "FeatureCollection", 'features': []}
+    for tfeat in tfeatures:
+        #print(tfeat['type'], tfeat['properties']) #, tfeat['arcs']) 
+        feat = {'type': "Feature"}
+        feat['properties'] = tfeat['properties'].copy()
+        feat['geometry'] = geometry(tfeat, data['arcs'], data.get('transform'))
+        geoj['features'].append(feat)
+    return geoj
+
 def morphology(arr, kernel, op, dtype):
     count = 0
     output = np.zeros(arr.shape, dtype=dtype)
@@ -92,4 +107,27 @@ def burn(val, geometry, drawer, transform):
 def show_surface(surf):
     import matplotlib.pyplot as plt
     plt.imshow(surf)
+    plt.show()
+
+def show_datasets(data1, data2):
+    import matplotlib.pyplot as plt
+    from shapely.geometry import asShape
+    # setup plot
+    plt.clf()
+    ax = plt.gca()
+    ax.set_aspect('equal', 'datalim')
+    # data1
+    for feat in data1['features']:
+        for ring in iter_rings(feat['geometry']):
+            ring = list(ring)
+            if ring[0]!=ring[-1]: ring.append(ring[-1])
+            x,y = zip(*ring)
+            plt.plot(x, y, color='tab:blue', marker='')
+    # data2
+    for feat in data2['features']:
+        for ring in iter_rings(feat['geometry']):
+            ring = list(ring)
+            if ring[0]!=ring[-1]: ring.append(ring[-1])
+            x,y = zip(*ring)
+            plt.plot(x, y, color='tab:red', marker='')
     plt.show()

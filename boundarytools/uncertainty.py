@@ -21,6 +21,9 @@ def _line_dists(shapes):
 def _line_resolution_min(dists):
     return sorted(dists) [ len(dists) // 100 ]
 
+def _line_resolution_med(dists):
+    return np.median(dists)
+
 
 class Boundary(object):
     def __init__(self, geom, precision, precision_range_max=None):
@@ -32,7 +35,7 @@ class Boundary(object):
         '''
         self.geom = geom
         self.precision = precision
-        self.precision_range_max = precision_range_max or self.line_resolution_min()
+        self.precision_range_max = precision_range_max or self.line_resolution_med()
 
     def bbox(self, expand=None):
         xs,ys = [],[]
@@ -50,6 +53,10 @@ class Boundary(object):
     def line_resolution_min(self):
         dists = _line_dists([self.geom])
         return _line_resolution_min(dists)
+
+    def line_resolution_med(self):
+        dists = _line_dists([self.geom])
+        return _line_resolution_med(dists)
 
     def distance_surface(self, resolution, bbox, maxdist=None, boundary=True):
         # PIL VERSION
@@ -363,7 +370,7 @@ class Boundary(object):
             ring = list(ring)
             if ring[0]!=ring[-1]: ring.append(ring[-1])
             x,y = zip(*ring)
-            plt.plot(x, y, color='tab:blue', marker='o')
+            plt.plot(x, y, color='tab:blue') #, marker='o')
         # outer range
         buf = self.precision_range_max
         outer = asShape(self.geom).buffer(buf).__geo_interface__
