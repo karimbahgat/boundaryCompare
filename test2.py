@@ -165,7 +165,7 @@ show_datasets(coll1, coll2)
 print('\n### A CONTAINS B')
 for feat in sorted(coll1['features'], key=lambda f: f['properties']['_name']):
     allstats = calc_stats(feat, coll2['features'])
-    # find contains
+    # find matches
     matches = belongs(allstats, 0) # get all sorted by within
     matches = [(comp,st) for comp,st in matches if (st['contains']>=0.1 or st['within']>=0.1)]
     if len(matches) > 0:
@@ -178,24 +178,17 @@ for feat in sorted(coll1['features'], key=lambda f: f['properties']['_name']):
             if len(matches) == 1:
                 if stats['equality'] >= 0.95:
                     relation = 'EQUAL TO'
+                    stat = stats['equality']
                 else:
                     relation = 'A SUBSET OF'
+                    stat = stats['contains']
             elif stats['contains'] >= 0.95:
                 relation = 'ALL OF'
+                stat = stats['within']
             else:
                 relation = 'PARTS OF'
-            print('\t'*1, relation, match['properties']['_name'], stats['within'])
-    # find belongs
-##    matches = belongs(allstats, 0) # get all sorted by belongs
-##    matches = [(comp,st) for comp,st in matches if (st['contains']>=0.1 or st['within']>=0.1)]
-##    if len(matches) > 0:
-##        print('-->', feat['properties']['_name'], 'BELONGS')
-##        for match,stats in matches:
-##            if stats['within'] >= 0.95:
-##                relation = 'FULLY TO'
-##            else:
-##                relation = 'PARTLY TO' #'PARTS ({}) OF'.format(stats['contains'])
-##            print('\t'*1, relation, match['properties']['_name'], stats['contains'])
+                stat = stats['within']
+            print('\t'*1, relation, match['properties']['_name'], stat)
 
 # find closest contains (reversed)
 print('\n### B CONTAINS A')
@@ -214,10 +207,14 @@ for feat in sorted(coll2['features'], key=lambda f: f['properties']['_name']):
             if len(matches) == 1:
                 if stats['equality'] >= 0.95:
                     relation = 'EQUAL TO'
+                    stat = stats['equality']
                 else:
                     relation = 'A SUBSET OF'
+                    stat = stats['contains']
             elif stats['contains'] >= 0.95:
                 relation = 'ALL OF'
+                stat = stats['within']
             else:
                 relation = 'PARTS OF'
-            print('\t'*1, relation, match['properties']['_name'], stats['within'])
+                stat = stats['within']
+            print('\t'*1, relation, match['properties']['_name'], stat)
