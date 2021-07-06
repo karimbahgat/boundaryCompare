@@ -118,6 +118,11 @@ coll2 = topo2geoj(topoj)
 for f in coll2['features']:
     f['properties']['_name'] = f['properties']['NAME_1']
 
+##topoj = json.loads(urlopen('https://media.githubusercontent.com/media/wmgeolab/geoContrast/main/releaseData/CIV_CNTIG/{country}/ADM1/CIV_CNTIG-{country}-ADM1.topojson'.format(country=country)).read())
+##coll2 = topo2geoj(topoj)
+##for f in coll2['features']:
+##    f['properties']['_name'] = f['properties']['ADM1_FR']
+
 print(len(coll1['features']), 'vs', len(coll1['features']))
 
 show_datasets(coll1, coll2)

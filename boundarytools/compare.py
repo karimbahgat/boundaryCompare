@@ -5,7 +5,7 @@
 
 from .uncertainty import _line_dists, _line_resolution_min
 
-from .utils import iter_rings
+from .utils import iter_rings, bbox_union
 
 import shapely
 from shapely.geometry import asShape, LineString, MultiLineString
@@ -47,6 +47,41 @@ def boundary_distances(geom1, geom2, interval_dist=None, signed_distances=False)
 
     return dists
 
+def joint_probability_surface(*boundaries, resolution=None, bbox=None):
+    if not bbox:
+        bboxes = [b.uncertainty_bbox() for b in boundaries]
+        bbox = bbox_union(*bboxes)
+    if not resolution:
+        dx = bbox[2]-bbox[0]
+        dy = bbox[3]-bbox[1]
+        import math
+        diag = math.hypot(dx, dy)
+        resolution = diag / 300.0
+
+    import numpy as np
+    joint = boundaries[0].uncertainty_surface(resolution, bbox)
+    for b in boundaries[1:]:
+        surf = b.uncertainty_surface(resolution, bbox)
+        joint *= surf
+    return joint
+
+def disjoint_probability_surface(*boundaries, resolution=None, bbox=None):
+    if not bbox:
+        bboxes = [b.uncertainty_bbox() for b in boundaries]
+        bbox = bbox_union(*bboxes)
+    if not resolution:
+        dx = bbox[2]-bbox[0]
+        dy = bbox[3]-bbox[1]
+        import math
+        diag = math.hypot(dx, dy)
+        resolution = diag / 300.0
+
+    import numpy as np
+    joint = 1 - boundaries[0].uncertainty_surface(resolution, bbox) # not
+    for b in boundaries[1:]:
+        surf = 1 - b.uncertainty_surface(resolution, bbox) # not
+        joint *= surf
+    return joint
 
 
     

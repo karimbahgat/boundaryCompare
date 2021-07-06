@@ -3,7 +3,7 @@ import boundarytools
 
 import shapefile
 
-if 1:
+if 0:
     # load data
     geom = shapefile.Reader(r"C:\Users\kimok\Desktop\boundary metric experiments\gadm36_ALB_1.shp").shape(0).__geo_interface__
 ##    r = shapefile.Reader(r"P:\(Temp Backup)\priocountries\priocountries.shp")
@@ -93,22 +93,19 @@ print('\nCOMPARISONS')
 
 def compare(geom1, geom2):
     # params
-    maxdist1 = 0.1
-    maxdist2 = 0.1
-    res = 0.01
-    
-    sig1 = maxdist1 / 3.0 #0.18**2
-    sig2 = maxdist2 / 3.0
-    prec1 = '1 / (sqrt(2*pi)*{sig}) * exp((-((x-{mu})/{sig})**2)/2.0) / 100.0'.format(mu=0, sig=sig1)
-    prec2 = '1 / (sqrt(2*pi)*{sig}) * exp((-((x-{mu})/{sig})**2)/2.0) / 100.0'.format(mu=0, sig=sig2)
+    # ... 
     
     # data 1
-    bnd1 = boundarytools.uncertainty.Boundary(geom1, prec1, maxdist1)
-    #bnd1.show(bnd1.uncertainty_surface(res))
+    bnd1 = boundarytools.uncertainty.NormalBoundary(geom1)
+    res = bnd1.precision_range_max / 10.0
+    print(bnd1.precision, bnd1.precision_range_max, res)
+    bnd1.show(bnd1.uncertainty_surface(res))
 
     # data 2
-    bnd2 = boundarytools.uncertainty.Boundary(geom2, prec2, maxdist2)
-    #bnd2.show(bnd2.uncertainty_surface(res))
+    bnd2 = boundarytools.uncertainty.NormalBoundary(geom2)
+    res = bnd2.precision_range_max / 10.0
+    print(bnd2.precision, bnd2.precision_range_max, res)
+    bnd2.show(bnd2.uncertainty_surface(res))
 
     # show overlap
     surf1,surf2,overlap = bnd1.overlap_surface(bnd2)

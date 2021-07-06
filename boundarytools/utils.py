@@ -1,5 +1,10 @@
 import numpy as np
 
+def bbox_union(*bboxes):
+    xmins,ymins,xmaxs,ymaxs = zip(*bboxes)
+    xmin,ymin,xmax,ymax = min(xmins),min(ymins),max(xmaxs),max(ymaxs)
+    return xmin,ymin,xmax,ymax
+
 def iter_rings(geoj):
     '''Iterates through all rings of a polygon/multipolygon
     '''
@@ -130,4 +135,45 @@ def show_datasets(data1, data2):
             if ring[0]!=ring[-1]: ring.append(ring[-1])
             x,y = zip(*ring)
             plt.plot(x, y, color='tab:red', marker='')
+    plt.show()
+        
+def show_boundaries(*boundaries, surf=None):
+    import matplotlib.pyplot as plt
+    from shapely.geometry import asShape
+    # setup plot
+    plt.clf()
+    ax = plt.gca()
+    ax.set_aspect('equal', 'datalim')
+    # add in surface
+    if surf is not None:
+        bboxes = [b.uncertainty_bbox() for b in boundaries]
+        xmin,ymin,xmax,ymax = bbox_union(*bboxes)
+        extent = [xmin,xmax,ymax,ymin]
+        plt.imshow(surf, extent=extent)
+    # and boundaries
+    for i,bnd in enumerate(boundaries):
+        # main shape
+        color = None
+        #for ring in iter_rings(bnd.geom):
+        #    ring = list(ring)
+        #    if ring[0]!=ring[-1]: ring.append(ring[-1])
+        #    x,y = zip(*ring)
+        #    p = plt.plot(x, y, color=color, linestyle='-.', linewidth=2, label=label) #, marker='o')
+        #    color = p[0].get_color()
+        # inner
+        inner = asShape(bnd.geom).buffer(-bnd.precision_range_max).__geo_interface__
+        for ring in iter_rings(inner):
+            ix,iy = zip(*ring)
+            label = 'Boundary {}'.format(i+1) if color is None else None # only the first ring gets a label
+            p = plt.plot(ix,iy, color=color, linestyle='--', label=label) #, marker='o')
+            color = p[0].get_color()
+        # outer
+        outer = asShape(bnd.geom).buffer(bnd.precision_range_max).__geo_interface__
+        for ring in iter_rings(outer):
+            ox,oy = zip(*ring)
+            plt.plot(ox,oy, color=color, linestyle='--', label="_nolegend") #, marker='o')
+    # show
+    if surf is not None:
+        plt.colorbar()
+    plt.legend()
     plt.show()

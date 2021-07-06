@@ -503,3 +503,17 @@ class Boundary(object):
         
         return similarity
 
+class NormalBoundary(Boundary):
+    def __init__(self, geom):
+        '''
+        - geom is a geojson dict
+        '''
+        self.geom = geom
+        dists = _line_dists([self.geom])
+        lineres = _line_resolution_med(dists) # median seems to be the best match for the normal distribution
+        stdev = lineres
+        mean = 0
+        self.precision = '1 / (sqrt(2*pi)*{sig}) * exp((-((x-{mu})/{sig})**2)/2.0) / 100.0'.format(mu=mean, sig=stdev)
+        self.precision_range_max = stdev * 3 # if the median line resolution = std of the normal distribution, then 3x std = full range
+
+
