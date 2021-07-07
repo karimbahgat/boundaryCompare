@@ -353,16 +353,20 @@ class Boundary(object):
 
         return output
 
-    def show(self, surf=None):
+    def show(self, surf=None, bbox=None):
         import matplotlib.pyplot as plt
         from shapely.geometry import asShape
         # setup plot
         plt.clf()
         ax = plt.gca()
         ax.set_aspect('equal', 'datalim')
+        if not bbox:
+            bbox = self.bbox(self.precision_range_max)
+        xmin,ymin,xmax,ymax = bbox
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymax, ymin)
         # add in surface
         if surf is not None:
-            xmin,ymin,xmax,ymax = self.bbox(self.precision_range_max)
             extent = [xmin,xmax,ymax,ymin]
             plt.imshow(surf, extent=extent)
         # main shape

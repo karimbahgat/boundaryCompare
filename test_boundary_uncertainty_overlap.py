@@ -95,7 +95,7 @@ def compare(geom1, geom2):
     stats = bnd1.similarity(bnd2, resolution=res)
     print(stats)
 
-def compare_multi(*feats):
+def compare_multi(*feats, thresh):
     boundaries = [boundarytools.uncertainty.NormalBoundary(feat['geometry']) for feat in feats]
 
     # resolution
@@ -104,35 +104,60 @@ def compare_multi(*feats):
 
     # show joint probability surface (all occur simultaneously)
     joint = boundarytools.compare.joint_probability_surface(*boundaries, resolution=res)
-    boundarytools.utils.show_boundaries(*boundaries, surf=joint)
+    boundarytools.utils.show_boundaries(boundaries, surf=joint)
 
     # print share of boundary1 area above 95% probability
     b1 = boundaries[0]
     b1surf = b1.uncertainty_surface(resolution=res)
-    b1area = (b1surf>0.5).sum() # 0.5 is the dividing line between the inside and outside of the original boundary
-    jointarea = (joint>0.95).sum()
+    b1area = (b1surf>=0.5).sum() # 0.5 is the dividing line between the inside and outside of the original boundary
+    jointarea = (joint>=thresh).sum()
     share = jointarea / b1area * 100
-    print('share above 95% probability (from the perspective of boundary1)', round(share,1))
+    print('area above {}% probability (from the perspective of boundary1)'.format(round(thresh*100)), round(share,1), '%')
 
     # show disjoint probability surface (all do not occur simultaneously)
     disjoint = boundarytools.compare.disjoint_probability_surface(*boundaries, resolution=res)
-    boundarytools.utils.show_boundaries(*boundaries, surf=disjoint)
+    boundarytools.utils.show_boundaries(boundaries, surf=disjoint)
 
     # certain one way or the other
     certain = np.maximum(joint, disjoint)
-    boundarytools.utils.show_boundaries(*boundaries, surf=certain)
+    boundarytools.utils.show_boundaries(boundaries, surf=certain)
 
     # uncertain of either
     # either joint or disjoint (ie not joint and not disjoint)
     # ie the places we are uncertain of, cannot tell one way or another
     uncertain = 1 - certain # not certain
-    boundarytools.utils.show_boundaries(*boundaries, surf=uncertain)
+    boundarytools.utils.show_boundaries(boundaries, surf=uncertain)
+
+def uncertain_territory(feat, thresh):
+    bnd = boundarytools.uncertainty.NormalBoundary(feat['geometry'])
+    res = bnd.precision_range_max / 2.0
+    surf = bnd.uncertainty_surface(resolution=res)
+    bnd.show(surf)
+
+    barea = (surf>=0.5).sum() # 0.5 is the dividing line between the inside and outside of the original boundary
+    certarea = (surf>=thresh).sum()
+    certshare = certarea / barea * 100
+    uncertshare = 100 - certshare
+    print('area below {}% probability ie uncertain'.format(round(thresh*100)), round(uncertshare,1), '%')
+
+
+### individual source uncertainty
+
+print('b1')
+uncertain_territory(feat1, 0.99)
+print('b2')
+uncertain_territory(feat2, 0.99)
+print('b3')
+uncertain_territory(feat3, 0.99)
+
+
+### compare
 
 # old
 #compare(feat1['geometry'], feat2['geometry'])
 
 # new
-compare_multi(feat1, feat2) #, feat3)
+compare_multi(feat1, feat2, thresh=0.99) #, feat3)
 
 
 
