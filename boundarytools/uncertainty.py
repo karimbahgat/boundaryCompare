@@ -221,6 +221,8 @@ class Boundary(object):
             top = np.flipud(bottom[1:,:]) # minus the kernel center
             kernel = np.concatenate([top, bottom], axis=0)
             #print('full kernel',kernel.shape,kernel)
+        else:
+            kernel = np.array([[1.0]])
         ###print('kernel footprint',resolution,kernel_bbox,kernel.shape)
 
         # normalize so whole distribution sums to 1? 

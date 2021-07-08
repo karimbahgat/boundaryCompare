@@ -47,7 +47,7 @@ def boundary_distances(geom1, geom2, interval_dist=None, signed_distances=False)
 
     return dists
 
-def joint_probability_surface(*boundaries, resolution=None, bbox=None):
+def joint_probability_surface(boundaries, resolution=None, bbox=None):
     if not bbox:
         bboxes = [b.uncertainty_bbox() for b in boundaries]
         bbox = bbox_union(*bboxes)
@@ -65,7 +65,7 @@ def joint_probability_surface(*boundaries, resolution=None, bbox=None):
         joint *= surf
     return joint
 
-def disjoint_probability_surface(*boundaries, resolution=None, bbox=None):
+def disjoint_probability_surface(boundaries, resolution=None, bbox=None):
     if not bbox:
         bboxes = [b.uncertainty_bbox() for b in boundaries]
         bbox = bbox_union(*bboxes)

@@ -65,21 +65,21 @@ def compare(geom1, geom2):
 
     # show joint probability surface (all occur simultaneously)
     joint = boundarytools.compare.joint_probability_surface(bnd1, bnd2, resolution=res)
-    #bnd1.show(surf=joint)
+    bnd1.show(surf=joint)
 
     # show disjoint probability surface (all do not occur simultaneously)
     disjoint = boundarytools.compare.disjoint_probability_surface(bnd1, bnd2, resolution=res)
-    #bnd1.show(surf=disjoint)
+    bnd1.show(surf=disjoint)
 
     # certain one way or the other
     certain = np.maximum(joint, disjoint)
-    boundarytools.utils.show_boundaries(bnd1, bnd2, surf=certain)
+    boundarytools.utils.show_boundaries([bnd1,bnd2], surf=certain)
 
     # uncertain of either
     # either joint or disjoint (ie not joint and not disjoint)
     # ie the places we are uncertain of, cannot tell one way or another
     uncertain = 1 - certain # not certain
-    boundarytools.utils.show_boundaries(bnd1, bnd2, surf=uncertain)
+    boundarytools.utils.show_boundaries([bnd1,bnd2], surf=uncertain)
 
     # fuzzyness
 
@@ -143,18 +143,18 @@ def uncertain_territory(feat, thresh):
 
 ### individual source uncertainty
 
-print('b1')
-uncertain_territory(feat1, 0.99)
-print('b2')
-uncertain_territory(feat2, 0.99)
-print('b3')
-uncertain_territory(feat3, 0.99)
+##print('b1')
+##uncertain_territory(feat1, 0.99)
+##print('b2')
+##uncertain_territory(feat2, 0.99)
+##print('b3')
+##uncertain_territory(feat3, 0.99)
 
 
 ### compare
 
 # old
-#compare(feat1['geometry'], feat2['geometry'])
+compare(feat1['geometry'], feat2['geometry'])
 
 # new
 compare_multi(feat1, feat2, thresh=0.99) #, feat3)

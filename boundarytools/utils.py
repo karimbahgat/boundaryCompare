@@ -111,7 +111,14 @@ def burn(val, geometry, drawer, transform):
 
 def show_surface(surf):
     import matplotlib.pyplot as plt
+    # setup plot
+    plt.clf()
+    ax = plt.gca()
+    ax.set_aspect('equal', 'datalim')
+    # add surface
     plt.imshow(surf)
+    # show
+    plt.colorbar()
     plt.show()
 
 def show_datasets(data1, data2):
@@ -156,7 +163,7 @@ def show_boundaries(boundaries, surf=None, bbox=None):
         plt.imshow(surf, extent=extent)
     # and boundaries
     for i,bnd in enumerate(boundaries):
-        print(i, bnd)
+        #print(i, bnd)
         # main shape
         color = None
         #for ring in iter_rings(bnd.geom):
