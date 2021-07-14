@@ -109,14 +109,19 @@ def burn(val, geometry, drawer, transform):
             path.transform((a,b,c,d,e,f))
             drawer.point(path, fill=outline)
 
-def show_surface(surf):
+def show_surface(surf, minval=None, maxval=None, flipy=True):
     import matplotlib.pyplot as plt
     # setup plot
     plt.clf()
     ax = plt.gca()
     ax.set_aspect('equal', 'datalim')
     # add surface
-    plt.imshow(surf)
+    if flipy:
+        plt.imshow(surf, origin='lower')
+    else:
+        plt.imshow(surf)
+    if minval or maxval:
+        plt.clim(minval, maxval)
     # show
     plt.colorbar()
     plt.show()
@@ -144,7 +149,7 @@ def show_datasets(data1, data2):
             plt.plot(x, y, color='tab:red', marker='')
     plt.show()
         
-def show_boundaries(boundaries, surf=None, bbox=None):
+def show_boundaries(boundaries, surf=None, bbox=None, flipy=True):
     import matplotlib.pyplot as plt
     from shapely.geometry import asShape
     # setup plot
@@ -187,5 +192,7 @@ def show_boundaries(boundaries, surf=None, bbox=None):
     # show
     if surf is not None:
         plt.colorbar()
+    if flipy:
+        ax.invert_yaxis()
     plt.legend()
     plt.show()

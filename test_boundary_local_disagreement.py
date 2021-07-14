@@ -178,10 +178,12 @@ boundarytools.utils.show_surface(diff)
 # calc diff stats
 allinside1 = probability_inside(coll1['features'], resolution=res)
 boundarytools.utils.show_surface(allinside1)
-share = diff.sum() / allinside1.sum() * 100
-print('share of country that disagrees across the two sources:', share, '%')
 
+share = (diff>0.05).sum() / (allinside1>0).sum() * 100 # count the full pixel where there is any diff/doubt
+print('share of country that has any disagreement (>5% probability) across the two sources:', share, '%')
 
+share = (diff>0.95).sum() / (allinside1>0).sum() * 100 # count only the highly doubtfull pixels
+print('share of country that highly likely disagrees (>95% probability) across the two sources:', share, '%')
 
 
 

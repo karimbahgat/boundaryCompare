@@ -124,6 +124,7 @@ res1 = min(bnd.precision_range_max for bnd in boundaries1) / 2.0
 res2 = min(bnd.precision_range_max for bnd in boundaries2) / 2.0
 print(res1,res2)
 res = min(res1,res2)
+res = 0.01
 print('resolution', res)
 
 # get bboxes

@@ -1,8 +1,9 @@
 import numpy as np
 from datetime import datetime, timedelta
 import math
+import copy
 
-from .utils import iter_rings, burn, morphology
+from .utils import iter_rings, burn, morphology, bbox_union
 
 
 def _line_dists(shapes):
@@ -25,7 +26,10 @@ def _line_resolution_med(dists):
     return np.median(dists)
 
 
+# classes
+
 class Boundary(object):
+
     def __init__(self, geom, precision, precision_range_max=None):
         '''
         - geom is a geojson dict
@@ -36,6 +40,8 @@ class Boundary(object):
         self.geom = geom
         self.precision = precision
         self.precision_range_max = precision_range_max or self.line_resolution_med()
+
+        self._uncertainty_surface = {}
 
     def bbox(self, expand=None):
         xs,ys = [],[]
@@ -257,6 +263,11 @@ class Boundary(object):
         maxdist = maxdist or self.precision_range_max
         bbox = bbox or self.bbox(maxdist)
 
+        # get from cache? 
+        k = maxdist,bbox
+        if k in self._uncertainty_surface:
+            return copy.deepcopy(self._uncertainty_surface[k])
+
         # get coord to pixel drawing transform
         xscale,xskew,xoff = resolution,0,bbox[0]-resolution # 1 pixel padding on each side
         yskew,yscale,yoff = 0,resolution,bbox[1]-resolution # 1 pixel padding on each side
@@ -353,9 +364,12 @@ class Boundary(object):
             
         convolute()
 
+        # cache results
+        self._uncertainty_surface[k] = copy.deepcopy(output)
+
         return output
 
-    def show(self, surf=None, bbox=None):
+    def show(self, surf=None, bbox=None, flipy=True):
         import matplotlib.pyplot as plt
         from shapely.geometry import asShape
         # setup plot
@@ -396,6 +410,8 @@ class Boundary(object):
         # show
         if surf is not None:
             plt.colorbar()
+        if flipy:
+            ax.invert_yaxis()
         plt.show()
 
     #################
@@ -510,16 +526,87 @@ class Boundary(object):
         return similarity
 
 class NormalBoundary(Boundary):
-    def __init__(self, geom):
+    def __init__(self, geom, mean=None, stdev=None):
         '''
         - geom is a geojson dict
         '''
         self.geom = geom
-        dists = _line_dists([self.geom])
-        lineres = _line_resolution_med(dists) # median seems to be the best match for the normal distribution
-        stdev = lineres
-        mean = 0
+
+        if stdev is None:
+            dists = _line_dists([self.geom])
+            lineres = _line_resolution_med(dists) # median seems to be the best match for the normal distribution
+            stdev = lineres
+        if mean is None:
+            mean = 0
+
         self.precision = '1 / (sqrt(2*pi)*{sig}) * exp((-((x-{mu})/{sig})**2)/2.0) / 100.0'.format(mu=mean, sig=stdev)
         self.precision_range_max = stdev * 3 # if the median line resolution = std of the normal distribution, then 3x std = full range
 
+        self._uncertainty_surface = {}
 
+
+# functions
+
+def probability_inside(boundaries, resolution=None, bbox=None):
+    # resolution
+    if not resolution:
+        resolution = min(bnd.precision_range_max for bnd in boundaries) / 4.0
+        print('resolution', resolution)
+
+    # get bboxes
+    if not bbox:
+        bboxes = [b.uncertainty_bbox() for b in boundaries]
+        bbox = bbox_union(*bboxes)
+
+    # probability of being inside any of the boundaries
+    cumul = None
+    for bnd in boundaries:
+        inside = bnd.uncertainty_surface(resolution, bbox=bbox)
+        #bnd.show(inside, bbox=bbox)
+        # get the probability inside our boundary AND not inside any other boundary
+        certinside = inside
+        for bnd2 in boundaries:
+            if bnd2 is bnd:
+                continue
+            insideother = bnd2.uncertainty_surface(resolution, bbox=bbox)
+            notinsideother = 1 - insideother
+            certinside *= notinsideother
+        #bnd.show(certinside, bbox=bbox)
+        # add to cumul
+        if cumul is None:
+            cumul = certinside
+        else:
+            cumul += certinside
+        #bnd.show(cumul, bbox=bbox)
+
+    #boundarytools.utils.show_boundaries(boundaries, cumul, bbox=bbox)
+    return cumul
+
+def crisp_footprints(boundaries, resolution=None, bbox=None):
+    # resolution
+    if not resolution:
+        resolution = min(bnd.precision_range_max for bnd in boundaries) / 4.0
+        print('resolution', resolution)
+
+    # get bboxes
+    if not bbox:
+        bboxes = [b.uncertainty_bbox() for b in boundaries]
+        bbox = bbox_union(*bboxes)
+
+    # pixels that are crisply within any of the boundaries
+    cumul = None
+    for bnd in boundaries:
+        inside = bnd.uncertainty_surface(resolution, bbox=bbox)
+        #bnd.show(certinside, bbox=bbox)
+        # add to cumul
+        if cumul is None:
+            cumul = inside
+        else:
+            cumul = np.maximum(cumul, inside)
+        #bnd.show(cumul, bbox=bbox)
+
+    # crispify (0.5 is the breaking point between inside and outside)
+    cumul = np.where(cumul>0.5, 1, 0)
+
+    #boundarytools.utils.show_boundaries(boundaries, cumul, bbox=bbox)
+    return cumul

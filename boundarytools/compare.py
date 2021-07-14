@@ -10,6 +10,8 @@ from .utils import iter_rings, bbox_union
 import shapely
 from shapely.geometry import asShape, LineString, MultiLineString
 
+import numpy as np
+
 def boundary_distances(geom1, geom2, interval_dist=None, signed_distances=False):
     # signed_distances is whether to consider the sign of the distances in terms of distance inside (negative)
     # ...and outside (positive) geom2. More computationally costly. 
@@ -58,7 +60,6 @@ def joint_probability_surface(boundaries, resolution=None, bbox=None):
         diag = math.hypot(dx, dy)
         resolution = diag / 300.0
 
-    import numpy as np
     joint = boundaries[0].uncertainty_surface(resolution, bbox)
     for b in boundaries[1:]:
         surf = b.uncertainty_surface(resolution, bbox)
@@ -76,12 +77,93 @@ def disjoint_probability_surface(boundaries, resolution=None, bbox=None):
         diag = math.hypot(dx, dy)
         resolution = diag / 300.0
 
-    import numpy as np
     joint = 1 - boundaries[0].uncertainty_surface(resolution, bbox) # not
     for b in boundaries[1:]:
         surf = 1 - b.uncertainty_surface(resolution, bbox) # not
         joint *= surf
     return joint
 
+def symmetric_difference_probability_surface(boundaries1, boundaries2, resolution=None, bbox=None):
+    # resolution
+    if not resolution:
+        ranges = [bnd.precision_range_max for bnd in boundaries1] + [bnd.precision_range_max for bnd in boundaries2]
+        resolution = min(ranges) / 2.0
+        print('resolution', resolution)
 
+    # get bboxes
+    if not bbox:
+        bboxes = [b.uncertainty_bbox() for b in boundaries1] + [b.uncertainty_bbox() for b in boundaries2]
+        bbox = bbox_union(*bboxes)
+
+    # probability of being inside any of the boundaries
+    cumul = None
+    for i,bnd1 in enumerate(boundaries1):
+        print(i+1,bnd1)
+        for i2,bnd2 in enumerate(boundaries2):
+            #print('--> bnd2',i2+1,bnd2)
+            isec = bnd1.bbox_intersection(bnd2)
+            if isec:
+                inside1 = bnd1.uncertainty_surface(resolution=resolution, bbox=bbox)
+                inside2 = bnd2.uncertainty_surface(resolution=resolution, bbox=bbox)
+                joint = inside1 * inside2
+                
+                # only compare those that make up more than half of area in the other boundary
+                # NOT SURE IF THAT IS THE RIGHT APPROACH... 
+                if (joint.sum() / inside2.sum()) >= 0.5: 
+                    notjoint = 1 - joint
+                    uniq = inside1*notjoint + inside2*notjoint # (b1 AND NOT intersection) OR (b2 AND NOT INTERSECTION)
+                    #boundarytools.utils.show_boundaries([bnd1,bnd2], uniq, bbox=bbox)
+                    if cumul is None:
+                        cumul = uniq
+                    else:
+                        cumul = np.maximum(cumul, uniq)
+
+    return cumul
     
+def similarity_surface(boundaries1, boundaries2, metric='equality', resolution=None, bbox=None):
+    # resolution
+    if not resolution:
+        ranges = [bnd.precision_range_max for bnd in boundaries1] + [bnd.precision_range_max for bnd in boundaries2]
+        resolution = min(ranges) / 2.0
+        print('resolution', resolution)
+
+    # get bboxes
+    if not bbox:
+        bboxes = [b.uncertainty_bbox() for b in boundaries1] + [b.uncertainty_bbox() for b in boundaries2]
+        bbox = bbox_union(*bboxes)
+
+    # similarity of overlapping boundaries for each pixel
+    cumul = None
+    maxprob = None
+    for i,bnd1 in enumerate(boundaries1):
+        print(i+1,bnd1)
+        for i2,bnd2 in enumerate(boundaries2):
+            #print('--> bnd2',i2+1,bnd2)
+            isec = bnd1.bbox_intersection(bnd2)
+            if isec:
+                stats = bnd1.similarity(bnd2, resolution=resolution, bbox=bbox)
+                val = stats[metric]
+                
+                #from boundarytools.utils import show_boundaries
+                #show_boundaries([bnd1,bnd2], bbox=bbox)
+
+                joint = joint_probability_surface([bnd1,bnd2], resolution, bbox)
+                #from boundarytools.utils import show_surface
+                #show_surface(joint, 0, 1)
+
+                # set to statval where joint prob is higher than any previous prob
+                # ie each pixel gets set to the pair similarity with highest prob
+                if cumul is not None:
+                    cumul = np.where(joint>maxprob, val, cumul)
+                    maxprob = np.maximum(maxprob, joint)
+                else:
+                    cumul = np.where(joint>0, val, float('nan'))
+                    maxprob = joint
+                
+                #show_surface(cumul, 0, 1)
+
+    return cumul
+
+
+
+
