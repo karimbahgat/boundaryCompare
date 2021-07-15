@@ -1,5 +1,12 @@
 import numpy as np
 
+def get_bbox(feat):
+    coords = []
+    for ring in iter_rings(feat['geometry']):
+        coords.extend(ring)
+    xs,ys = zip(*coords)
+    return min(xs),min(ys),max(xs),max(ys)
+
 def bbox_union(*bboxes):
     xmins,ymins,xmaxs,ymaxs = zip(*bboxes)
     xmin,ymin,xmax,ymax = min(xmins),min(ymins),max(xmaxs),max(ymaxs)
@@ -109,30 +116,56 @@ def burn(val, geometry, drawer, transform):
             path.transform((a,b,c,d,e,f))
             drawer.point(path, fill=outline)
 
-def show_surface(surf, minval=None, maxval=None, flipy=True):
+def show_surface(surf, minval=None, maxval=None, flipy=True, cmap=None):
     import matplotlib.pyplot as plt
     # setup plot
     plt.clf()
     ax = plt.gca()
     ax.set_aspect('equal', 'datalim')
     # add surface
+    opts = {}
+    if cmap:
+        opts['cmap'] = cmap
     if flipy:
-        plt.imshow(surf, origin='lower')
-    else:
-        plt.imshow(surf)
-    if minval or maxval:
+        opts['origin'] = 'lower'
+    plt.imshow(surf, **opts)
+    if minval is not None or maxval is not None:
         plt.clim(minval, maxval)
     # show
     plt.colorbar()
     plt.show()
 
-def show_datasets(data1, data2):
+def show_datasets(data1, data2, surf=None, bbox=None, minval=None, maxval=None, flipy=True, cmap=None):
     import matplotlib.pyplot as plt
     from shapely.geometry import asShape
     # setup plot
     plt.clf()
     ax = plt.gca()
     ax.set_aspect('equal', 'datalim')
+    # set the data bbox
+    bboxes = [get_bbox(feat1) for feat1 in data1['features']] + [get_bbox(feat2) for feat2 in data2['features']]
+    bbox = bbox_union(*bboxes)
+    xmin,ymin,xmax,ymax = bbox
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax) # maybe depends on flipy? 
+    # add surface
+    if surf is not None:
+        opts = {}
+        if cmap:
+            opts['cmap'] = cmap
+        if flipy:
+            opts['origin'] = 'lower'
+
+        if bbox:
+            xmin,ymin,xmax,ymax = bbox
+            opts['extent'] = [xmin,xmax,ymax,ymin] # maybe depends on flipy? 
+        else:
+            raise Exception('bbox arg is required in order to know where the surf represents')            
+
+        plt.imshow(surf, **opts)
+
+        if minval is not None or maxval is not None:
+            plt.clim(minval, maxval)
     # data1
     for feat in data1['features']:
         for ring in iter_rings(feat['geometry']):
@@ -147,6 +180,11 @@ def show_datasets(data1, data2):
             if ring[0]!=ring[-1]: ring.append(ring[-1])
             x,y = zip(*ring)
             plt.plot(x, y, color='tab:red', marker='')
+    # show
+    if surf is not None:
+        plt.colorbar()
+    if flipy:
+        pass #ax.invert_yaxis() # maybe not necessary? 
     plt.show()
         
 def show_boundaries(boundaries, surf=None, bbox=None, flipy=True):
