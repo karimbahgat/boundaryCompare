@@ -26,16 +26,58 @@ def iter_rings(geoj):
 def topo2geoj(data):
     '''Data is the toplevel topojson dict containing: type, objects, arcs'''
     from topojson.utils import geometry
+    from topojson.ops import dequantize
     lyr = list(data['objects'].keys())[0]
     tfeatures = data['objects'][lyr]['geometries']
     data['arcs'] = [np.array(arc) for arc in data['arcs']] # topojson.utils.geometry() assumes np arrays
+    transform = data.get('transform')
+    if transform:
+        raise Exception('Quantized coordinates not currently supported')
+        # transform arg doesnt do anything for polygons, so need to do this manually
+        # NOT WORKING YET
+        print(str(data['arcs'])[:1000])
+        data['arcs'] = [dequantize(arc.T, **transform).T for arc in data['arcs']]
+        print(str(data['arcs'])[:1000])
     geoj = {'type': "FeatureCollection", 'features': []}
     for tfeat in tfeatures:
         #print(tfeat['type'], tfeat['properties']) #, tfeat['arcs']) 
         feat = {'type': "Feature"}
         feat['properties'] = tfeat['properties'].copy()
-        feat['geometry'] = geometry(tfeat, data['arcs'], data.get('transform'))
+        feat['geometry'] = geometry(tfeat, data['arcs'], transform)
+        coords = feat['geometry']['coordinates']
         geoj['features'].append(feat)
+    return geoj
+
+def iter_geocontrast_metatable():
+    from urllib.request import urlopen
+    import csv
+    url = 'https://raw.githubusercontent.com/wmgeolab/geoContrast/main/releaseData/geoContrast-meta.csv'
+    raw = urlopen(url).read().decode('utf8').split('\n')
+    reader = csv.DictReader(raw, delimiter=',')
+    for row in reader:
+        yield row
+
+def find_geocontrast_sources(iso, level):
+    sources = {}
+    for row in iter_geocontrast_metatable():
+        if row['boundaryISO'] == iso and row['boundaryType'] == 'ADM{}'.format(level):
+            source = row['boundarySource-1']
+            apiURL = row['apiURL']
+            sources[source] = apiURL
+    
+    return sources
+
+def load_topojson_url(url):
+    from urllib.request import urlopen
+    import json
+    topoj = json.loads(urlopen(url).read())
+    coll = topo2geoj(topoj)
+    return coll
+
+def load_geojson_url(url):
+    from urllib.request import urlopen
+    import json
+    geoj = json.loads(urlopen(url).read())
     return geoj
 
 def morphology(arr, kernel, op, dtype):
@@ -133,6 +175,38 @@ def show_surface(surf, minval=None, maxval=None, flipy=True, cmap=None):
         plt.clim(minval, maxval)
     # show
     plt.colorbar()
+    plt.show()
+
+def show_dataset(data, color_by=None, cmap=None, minval=None, maxval=None, flipy=True):
+    import matplotlib.pyplot as plt
+    from shapely.geometry import asShape
+    # setup plot
+    plt.clf()
+    ax = plt.gca()
+    ax.set_aspect('equal', 'datalim')
+    # calc the colors
+    import classypie as cp
+    key = lambda f: f['properties'][color_by]
+    if not cmap:
+        cmap = 'PiYG'
+    from matplotlib import cm
+    cmap_obj = cm.get_cmap(cmap)
+    color_by_colors = [tuple(col) for col in cmap_obj(range(cmap_obj.N+1))]
+    breaks = cp.breaks([0,1], 'equal', classes=100,
+                            minval=minval, maxval=maxval)
+    classif = cp.Classifier(data['features'], breaks=breaks, #classes=100,
+                            key=key, classvalues=color_by_colors,
+                            minval=minval, maxval=maxval)
+    # plot the data
+    for feat,col in classif:
+        for ring in iter_rings(feat['geometry']):
+            ring = list(ring)
+            if ring[0]!=ring[-1]: ring.append(ring[-1])
+            x,y = zip(*ring)
+            plt.fill(x, y, color=col)
+            plt.plot(x, y, color='black', marker='')
+    # show
+    plt.colorbar(cm.ScalarMappable(cmap=cmap))
     plt.show()
 
 def show_datasets(data1, data2, surf=None, bbox=None, minval=None, maxval=None, flipy=True, cmap=None):

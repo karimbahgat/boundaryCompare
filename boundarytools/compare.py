@@ -5,7 +5,7 @@
 
 from .uncertainty import _line_dists, _line_resolution_min
 
-from .utils import iter_rings, bbox_union
+from .utils import iter_rings, get_bbox, bbox_union
 
 import shapely
 from shapely.geometry import asShape, LineString, MultiLineString
@@ -99,6 +99,7 @@ def symmetric_difference_probability_surface(boundaries1, boundaries2, resolutio
     cumul = None
     for i,bnd1 in enumerate(boundaries1):
         print(i+1,bnd1)
+        matches = []
         for i2,bnd2 in enumerate(boundaries2):
             #print('--> bnd2',i2+1,bnd2)
             isec = bnd1.bbox_intersection(bnd2)
@@ -106,20 +107,68 @@ def symmetric_difference_probability_surface(boundaries1, boundaries2, resolutio
                 inside1 = bnd1.uncertainty_surface(resolution=resolution, bbox=bbox)
                 inside2 = bnd2.uncertainty_surface(resolution=resolution, bbox=bbox)
                 joint = inside1 * inside2
-                
-                # only compare those that make up more than half of area in the other boundary
-                # NOT SURE IF THAT IS THE RIGHT APPROACH... 
-                if (joint.sum() / inside2.sum()) >= 0.5: 
-                    notjoint = 1 - joint
-                    uniq = inside1*notjoint + inside2*notjoint # (b1 AND NOT intersection) OR (b2 AND NOT INTERSECTION)
-                    #boundarytools.utils.show_boundaries([bnd1,bnd2], uniq, bbox=bbox)
-                    if cumul is None:
-                        cumul = uniq
-                    else:
-                        cumul = np.maximum(cumul, uniq)
+                union = np.maximum(inside1, inside2)
+
+                equals = joint.sum() / union.sum()
+                matches.append((equals,joint,inside1,inside2))
+
+        # only compare to the most equal in source2
+        equals,joint,inside1,inside2 = sorted(matches, key=lambda x: -x[0])[0]
+
+        # calc symmetric difference
+        symdiff = (inside1-joint) + (inside2-joint)
+        #boundarytools.utils.show_boundaries([bnd1,bnd2], uniq, bbox=bbox)
+
+        if cumul is None:
+            cumul = symdiff
+        else:
+            cumul = np.maximum(cumul, symdiff)
 
     return cumul
     
+def difference_probability_surface(boundaries1, boundaries2, resolution=None, bbox=None):
+    # resolution
+    if not resolution:
+        ranges = [bnd.precision_range_max for bnd in boundaries1] + [bnd.precision_range_max for bnd in boundaries2]
+        resolution = min(ranges) / 2.0
+        print('resolution', resolution)
+
+    # get bboxes
+    if not bbox:
+        bboxes = [b.uncertainty_bbox() for b in boundaries1] + [b.uncertainty_bbox() for b in boundaries2]
+        bbox = bbox_union(*bboxes)
+
+    # probability of being inside any of the boundaries
+    cumul = None
+    for i,bnd1 in enumerate(boundaries1):
+        print(i+1,bnd1)
+        matches = []
+        for i2,bnd2 in enumerate(boundaries2):
+            #print('--> bnd2',i2+1,bnd2)
+            isec = bnd1.bbox_intersection(bnd2)
+            if isec:
+                inside1 = bnd1.uncertainty_surface(resolution=resolution, bbox=bbox)
+                inside2 = bnd2.uncertainty_surface(resolution=resolution, bbox=bbox)
+                joint = inside1 * inside2
+                union = np.maximum(inside1, inside2)
+
+                equals = joint.sum() / union.sum()
+                matches.append((equals,joint,inside1,inside2))
+
+        # only compare to the most equal in source2
+        equals,joint,inside1,inside2 = sorted(matches, key=lambda x: -x[0])[0]
+
+        # calc what's unique to source1
+        uniq = inside1-joint 
+        #boundarytools.utils.show_boundaries([bnd1,bnd2], uniq, bbox=bbox)
+
+        if cumul is None:
+            cumul = uniq
+        else:
+            cumul = np.maximum(cumul, uniq)
+
+    return cumul
+
 def similarity_surface(boundaries1, boundaries2, metric='equality', resolution=None, bbox=None):
     # resolution
     if not resolution:
@@ -164,6 +213,44 @@ def similarity_surface(boundaries1, boundaries2, metric='equality', resolution=N
 
     return cumul
 
+def probability_feature_same_as_features(feat, features):
+    geom1 = asShape(feat['geometry'])
+    geom1 = geom1.buffer(0) # clean
+    bbox1 = geom1.bounds
+    xmin1,ymin1,xmax1,ymax1 = bbox1
 
+    cumprob = 0
+    for feat2 in features:
+        bbox2 = get_bbox(feat2)
+        xmin2,ymin2,xmax2,ymax2 = bbox2
+        boxoverlap = (xmin1 <= xmax2 and xmax1 >= xmin2 and ymin1 <= ymax2 and ymax1 >= ymin2)
+        if boxoverlap:
+            geom2 = asShape(feat2['geometry'])
+            geom2 = geom2.buffer(0) # clean
+            try:
+                isec = geom1.intersection(geom2)
+            except:
+                # unable to perform intersection even after cleaning, skip
+                continue
+            if not isec.is_empty:
+                probability_intersects_geom2 = isec.area / geom1.area
+                probability_is_same = isec.area / geom1.union(geom2).area
+                probability_both = probability_intersects_geom2 * probability_is_same
+                cumprob += probability_both
 
+    return cumprob
+
+def probabilities_aggregate(features, aggregate_to_feat, probability_field):
+    geom1 = asShape(aggregate_to_feat['geometry'])
+    totarea = geom1.area
+
+    cumprob = 0
+    for feat in features:
+        geom2 = asShape(feat['geometry'])
+        probability_intersects_geom2 = geom2.area / geom1.area
+        probability_is_same = feat['properties'][probability_field]
+        probability_both = probability_intersects_geom2 * probability_is_same
+        cumprob += probability_both
+
+    return cumprob
 

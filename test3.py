@@ -6,23 +6,16 @@ import json
 
 from urllib.request import urlopen
 
-def compare(geom1, geom2):
-    # params
-    maxdist1 = 0.1
-    maxdist2 = 0.1
-    res = 0.01
-    
-    sig1 = maxdist1 / 3.0 #0.18**2
-    sig2 = maxdist2 / 3.0
-    prec1 = '1 / (sqrt(2*pi)*{sig}) * exp((-((x-{mu})/{sig})**2)/2.0) / 100.0'.format(mu=0, sig=sig1)
-    prec2 = '1 / (sqrt(2*pi)*{sig}) * exp((-((x-{mu})/{sig})**2)/2.0) / 100.0'.format(mu=0, sig=sig2)
-    
+import warnings
+warnings.filterwarnings("ignore")
+
+def compare(geom1, geom2, resolution=None):
     # data 1
-    bnd1 = boundarytools.uncertainty.Boundary(geom1, prec1, maxdist1)
+    bnd1 = boundarytools.uncertainty.NormalBoundary(geom1, mean=0, stdev=0)
     #bnd1.show(bnd1.uncertainty_surface(res))
 
     # data 2
-    bnd2 = boundarytools.uncertainty.Boundary(geom2, prec2, maxdist2)
+    bnd2 = boundarytools.uncertainty.NormalBoundary(geom2, mean=0, stdev=0)
     #bnd2.show(bnd2.uncertainty_surface(res))
 
     # show overlap
@@ -34,7 +27,7 @@ def compare(geom1, geom2):
     #bnd1.show(surf=diff)
 
     # stats test
-    stats = bnd1.similarity(bnd2)
+    stats = bnd1.similarity(bnd2, resolution=resolution)
     return stats
 
 def show_datasets(data1, data2):
@@ -60,11 +53,11 @@ def show_datasets(data1, data2):
             plt.plot(x, y, color='tab:red', marker='')
     plt.show()
 
-def calc_stats(feat, comparisons):
+def calc_stats(feat, comparisons, resolution=None):
     # calc stats for all pairs
     all_stats = []
     for comp in comparisons:
-        st = compare(feat['geometry'], comp['geometry'])
+        st = compare(feat['geometry'], comp['geometry'], resolution=resolution)
         all_stats.append((comp,st))
 
     return all_stats
@@ -130,7 +123,7 @@ show_datasets(coll1, coll2)
 # find closest matches for each unit (old classification version...)
 for feat in coll1['features']:
     print(feat['properties']['name'])
-    allstats = calc_stats(feat, coll2['features'])
+    allstats = calc_stats(feat, coll2['features'], resolution=0.05)
     # find equals
     matches = equals(allstats)
     for match,stats in matches:
@@ -159,6 +152,17 @@ for feat in coll1['features']:
 
 
 fdfdasfa
+
+
+
+
+
+
+
+
+
+
+
 
     
 # find closest equals
