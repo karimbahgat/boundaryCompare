@@ -1,9 +1,20 @@
 import numpy as np
+from shapely.geometry import asShape
+
+def get_shapely(feat):
+    if 'shapely' in feat:
+        return feat['shapely']
+    else:
+        return asShape(feat['geometry'])
 
 def get_bbox(feat):
-    coords = []
-    for ring in iter_rings(feat['geometry']):
-        coords.extend(ring)
+    #if 'shapely' in feat:
+    #    return feat['shapely'].bounds
+    if 'bbox' in feat:
+        return feat['bbox']
+    coords = (p 
+            for ring in iter_rings(feat['geometry'])
+            for p in ring)
     xs,ys = zip(*coords)
     return min(xs),min(ys),max(xs),max(ys)
 
@@ -67,17 +78,25 @@ def find_geocontrast_sources(iso, level):
     
     return sources
 
-def load_topojson_url(url):
+def load_topojson_url(url, load_shapely=False):
     from urllib.request import urlopen
     import json
     topoj = json.loads(urlopen(url).read())
     coll = topo2geoj(topoj)
+    if load_shapely:
+        for feat in coll['features']:
+            feat['shapely'] = asShape(feat['geometry'])
+            feat['bbox'] = get_bbox(feat)
     return coll
 
-def load_geojson_url(url):
+def load_geojson_url(url, load_shapely=False):
     from urllib.request import urlopen
     import json
     geoj = json.loads(urlopen(url).read())
+    if load_shapely:
+        for feat in geoj['features']:
+            feat['shapely'] = asShape(feat['geometry'])
+            feat['bbox'] = get_bbox(feat)
     return geoj
 
 def morphology(arr, kernel, op, dtype):
@@ -166,6 +185,8 @@ def show_surface(surf, minval=None, maxval=None, flipy=True, cmap=None):
     ax.set_aspect('equal', 'datalim')
     # add surface
     opts = {}
+    if not cmap:
+        cmap = 'PiYG'
     if cmap:
         opts['cmap'] = cmap
     if flipy:
@@ -175,7 +196,7 @@ def show_surface(surf, minval=None, maxval=None, flipy=True, cmap=None):
         plt.clim(minval, maxval)
     # show
     plt.colorbar()
-    plt.show()
+    return plt.gcf()
 
 def show_dataset(data, color_by=None, cmap=None, minval=None, maxval=None, flipy=True):
     import matplotlib.pyplot as plt
@@ -207,7 +228,7 @@ def show_dataset(data, color_by=None, cmap=None, minval=None, maxval=None, flipy
             plt.plot(x, y, color='black', marker='')
     # show
     plt.colorbar(cm.ScalarMappable(cmap=cmap))
-    plt.show()
+    return plt.gcf()
 
 def show_datasets(data1, data2, surf=None, bbox=None, minval=None, maxval=None, flipy=True, cmap=None):
     import matplotlib.pyplot as plt
@@ -259,7 +280,7 @@ def show_datasets(data1, data2, surf=None, bbox=None, minval=None, maxval=None, 
         plt.colorbar()
     if flipy:
         pass #ax.invert_yaxis() # maybe not necessary? 
-    plt.show()
+    return plt.gcf()
         
 def show_boundaries(boundaries, surf=None, bbox=None, flipy=True):
     import matplotlib.pyplot as plt
@@ -307,4 +328,4 @@ def show_boundaries(boundaries, surf=None, bbox=None, flipy=True):
     if flipy:
         ax.invert_yaxis()
     plt.legend()
-    plt.show()
+    return plt.gcf()

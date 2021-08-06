@@ -5,7 +5,7 @@
 
 from .uncertainty import _line_dists, _line_resolution_min
 
-from .utils import iter_rings, get_bbox, bbox_union
+from .utils import iter_rings, get_shapely, get_bbox, bbox_union
 
 import shapely
 from shapely.geometry import asShape, LineString, MultiLineString
@@ -214,9 +214,8 @@ def similarity_surface(boundaries1, boundaries2, metric='equality', resolution=N
     return cumul
 
 def probability_feature_same_as_features(feat, features):
-    geom1 = asShape(feat['geometry'])
-    geom1 = geom1.buffer(0) # clean
-    bbox1 = geom1.bounds
+    geom1 = get_shapely(feat)
+    bbox1 = get_bbox(feat)
     xmin1,ymin1,xmax1,ymax1 = bbox1
 
     cumprob = 0
@@ -225,29 +224,34 @@ def probability_feature_same_as_features(feat, features):
         xmin2,ymin2,xmax2,ymax2 = bbox2
         boxoverlap = (xmin1 <= xmax2 and xmax1 >= xmin2 and ymin1 <= ymax2 and ymax1 >= ymin2)
         if boxoverlap:
-            geom2 = asShape(feat2['geometry'])
-            geom2 = geom2.buffer(0) # clean
+            geom2 = get_shapely(feat2)
             try:
                 isec = geom1.intersection(geom2)
             except:
-                # unable to perform intersection even after cleaning, skip
+                # unable to perform intersection, skip
                 continue
             if not isec.is_empty:
-                probability_intersects_geom2 = isec.area / geom1.area
-                probability_is_same = isec.area / geom1.union(geom2).area
+                try:
+                    union = geom1.union(geom2)
+                except:
+                    # unable to perform union, skip
+                    continue
+                isec_area = isec.area
+                probability_intersects_geom2 = isec_area / geom1.area
+                probability_is_same = isec_area / union.area
                 probability_both = probability_intersects_geom2 * probability_is_same
                 cumprob += probability_both
 
     return cumprob
 
 def probabilities_aggregate(features, aggregate_to_feat, probability_field):
-    geom1 = asShape(aggregate_to_feat['geometry'])
+    geom1 = get_shapely(aggregate_to_feat)
     totarea = geom1.area
-
+    
     cumprob = 0
     for feat in features:
-        geom2 = asShape(feat['geometry'])
-        probability_intersects_geom2 = geom2.area / geom1.area
+        geom2 = get_shapely(feat)
+        probability_intersects_geom2 = geom2.area / totarea
         probability_is_same = feat['properties'][probability_field]
         probability_both = probability_intersects_geom2 * probability_is_same
         cumprob += probability_both
