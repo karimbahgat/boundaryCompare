@@ -36,27 +36,32 @@ def iter_rings(geoj):
 
 def topo2geoj(data):
     '''Data is the toplevel topojson dict containing: type, objects, arcs'''
-    from topojson.utils import geometry
-    from topojson.ops import dequantize
+    #from topojson.utils import geometry
+    #from topojson.ops import dequantize
+    # lyr = list(data['objects'].keys())[0]
+    # tfeatures = data['objects'][lyr]['geometries']
+    # data['arcs'] = [np.array(arc) for arc in data['arcs']] # topojson.utils.geometry() assumes np arrays
+    # transform = data.get('transform')
+    # if transform:
+    #     raise Exception('Quantized coordinates not currently supported')
+    #     # transform arg doesnt do anything for polygons, so need to do this manually
+    #     # NOT WORKING YET
+    #     print(str(data['arcs'])[:1000])
+    #     data['arcs'] = [dequantize(arc.T, **transform).T for arc in data['arcs']]
+    #     print(str(data['arcs'])[:1000])
+    # geoj = {'type': "FeatureCollection", 'features': []}
+    # for tfeat in tfeatures:
+    #     #print(tfeat['type'], tfeat['properties']) #, tfeat['arcs']) 
+    #     feat = {'type': "Feature"}
+    #     feat['properties'] = tfeat['properties'].copy()
+    #     feat['geometry'] = geometry(tfeat, data['arcs'], transform)
+    #     coords = feat['geometry']['coordinates']
+    #     geoj['features'].append(feat)
+    
+    from topojson.utils import serialize_as_geojson
     lyr = list(data['objects'].keys())[0]
-    tfeatures = data['objects'][lyr]['geometries']
-    data['arcs'] = [np.array(arc) for arc in data['arcs']] # topojson.utils.geometry() assumes np arrays
-    transform = data.get('transform')
-    if transform:
-        raise Exception('Quantized coordinates not currently supported')
-        # transform arg doesnt do anything for polygons, so need to do this manually
-        # NOT WORKING YET
-        print(str(data['arcs'])[:1000])
-        data['arcs'] = [dequantize(arc.T, **transform).T for arc in data['arcs']]
-        print(str(data['arcs'])[:1000])
-    geoj = {'type': "FeatureCollection", 'features': []}
-    for tfeat in tfeatures:
-        #print(tfeat['type'], tfeat['properties']) #, tfeat['arcs']) 
-        feat = {'type': "Feature"}
-        feat['properties'] = tfeat['properties'].copy()
-        feat['geometry'] = geometry(tfeat, data['arcs'], transform)
-        coords = feat['geometry']['coordinates']
-        geoj['features'].append(feat)
+    geoj = serialize_as_geojson(data, objectname=lyr)
+
     return geoj
 
 def iter_geocontrast_metatable():

@@ -3,6 +3,7 @@ import boundarytools
 import numpy as np
 from pyproj import Geod
 geod = Geod(ellps="WGS84")
+#from shapely.validation import make_valid
 
 import os
 import sys
@@ -17,8 +18,10 @@ from time import time
 # params
 
 OUTPUT_DIR = 'global_relations'
+SOURCES = []
 IGNORE_SOURCES = []
 MAXPROCS = 3
+COUNTRIES = ['CUB']
 
 
 def loop_country_levels():
@@ -32,9 +35,7 @@ def loop_country_levels():
         yield iso,level
 
 
-def get_country_level_areas(country, level):
-    results = {}
-    
+def get_country_level_areas(country, level):    
     # first get all possible sources
     sourcedict = boundarytools.utils.find_geocontrast_sources(country, level)
     print('available sources:', sourcedict.keys())
@@ -43,15 +44,28 @@ def get_country_level_areas(country, level):
     print('loading all data')
     sourcedata = {}
     for source,url in sourcedict.items():
-        if source in IGNORE_SOURCES: continue
-        if 'geoBoundaries' in source:
-            url = url.replace('.topojson','.geojson')
-            coll = boundarytools.utils.load_geojson_url(url, load_shapely=True)
-        else:
-            coll = boundarytools.utils.load_topojson_url(url, load_shapely=True)
-        # simplify
+        if SOURCES and source not in SOURCES: continue
+        elif source in IGNORE_SOURCES: continue
+        #if 'geoBoundaries' in source:
+        #    url = url.replace('.topojson','.geojson')
+        #    coll = boundarytools.utils.load_geojson_url(url, load_shapely=True)
+        #else:
+        #    coll = boundarytools.utils.load_topojson_url(url, load_shapely=True)
+        print('loading', url)
+        coll = boundarytools.utils.load_topojson_url(url, load_shapely=True)
+        # delete geojson repr to reduce memory (only need shapely)
         for feat in coll['features']:
-            feat['shapely'] = feat['shapely'].buffer(0).simplify(0.0001) # ca 10m
+            del feat['geometry']
+        # simplify
+        print('simplifying')
+        for feat in coll['features']:
+            feat['shapely'] = feat['shapely'].simplify(0.0001, True) # ca 10m
+        # validating
+        print('validating')
+        if not feat['shapely'].is_valid:
+            feat['shapely'] = feat['shapely'].buffer(0)
+        #for feat in coll['features']:
+        #    feat['shapely'] = make_valid(feat['shapely'])
         sourcedata[source] = coll
 
     # first calc feature areas of each source
@@ -63,7 +77,6 @@ def get_country_level_areas(country, level):
             area,perim = geojson_area_perimeter(feat['shapely'].__geo_interface__)
             areas.append(round(area, 1))
         source_areas[source] = areas
-    results['areas'] = source_areas
 
     # next calc relations bw all pairs of sources
     print('calculating pairwise feature relations')
@@ -108,9 +121,7 @@ def get_country_level_areas(country, level):
         if source_errors_row:
             source_errors_matrix[source1] = source_errors_row
 
-    results['relations'] = source_results_matrix
-
-    return results, source_errors_matrix
+    return source_areas, source_results_matrix, source_errors_matrix
 
 
 def get_feature_pair_areas(coll1, coll2):
@@ -128,8 +139,8 @@ def get_feature_pair_areas(coll1, coll2):
     for i1,feat1 in enumerate(coll1['features']):
         #print('feat1',i1)
         for i2,feat2 in enumerate(coll2['features']):
-            if bbox_overlap(feat1['bbox'], feat2['bbox']) and feat1['shapely'].intersects(feat2['shapely']):
-                try:
+            try:
+                if bbox_overlap(feat1['bbox'], feat2['bbox']) and feat1['shapely'].intersects(feat2['shapely']):
                     # AB intersection
                     geom = feat1['shapely'].intersection(feat2['shapely'])
                     AB,_ = geojson_area_perimeter(geom.__geo_interface__)
@@ -145,14 +156,14 @@ def get_feature_pair_areas(coll1, coll2):
                     # add entry
                     entry = [i1,i2,[round(Adiff,1),round(Bdiff,1),round(AB,1)]]
                     relations.append(entry)
-                except:
-                    err = traceback.format_exc()
-                    entry = [i1,i2,err]
-                    errors.append(entry)
-            else:
-                # no intersection, so Adiff and Bdiff are exclusive
-                # no need to store anything about the relations
-                pass
+                else:
+                    # no intersection, so Adiff and Bdiff are exclusive
+                    # no need to store anything about the relations
+                    pass
+            except:
+                err = traceback.format_exc()
+                entry = [i1,i2,err]
+                errors.append(entry)
     return relations, errors
 
 
@@ -195,13 +206,19 @@ def geojson_area_perimeter(geoj):
 
 def process(iso, level):
     # calc stats
-    stats,errors = get_country_level_areas(iso, level)
+    areas,relations,errors = get_country_level_areas(iso, level)
 
-    # dump feature pair areas as json
+    # dump source feature areas as json
+    filename = '{}-ADM{}-areas.json'.format(iso, level)
+    path = os.path.join(OUTPUT_DIR, filename)
+    with open(path, 'w', encoding='utf8') as w:
+        json.dump(areas, w) #, indent=4)
+
+    # dump feature pair relations as json
     filename = '{}-ADM{}-relations.json'.format(iso, level)
     path = os.path.join(OUTPUT_DIR, filename)
     with open(path, 'w', encoding='utf8') as w:
-        json.dump(stats, w) #, indent=4)
+        json.dump(relations, w) #, indent=4)
 
     # dump errors as json if any
     if errors:
@@ -212,14 +229,17 @@ def process(iso, level):
 
 
 def process_logger(logfile, func, **kwargs):
-    logger = open(logfile, 'w', encoding='utf8')
+    logger = open(logfile, 'w', encoding='utf8', buffering=1)
     sys.stdout = logger
     sys.stderr = logger
     print('PID:',os.getpid())
     print('time',datetime.datetime.now().isoformat())
     print('working path',os.path.abspath(''))
     # run it
-    func(**kwargs)
+    try:
+        func(**kwargs)
+    except:
+        traceback.print_exc()
     # finish
     print('finished!')
     print('time',datetime.datetime.now().isoformat())
@@ -231,6 +251,9 @@ if __name__ == '__main__':
 
     # loop country levels
     for iso,level in loop_country_levels():
+        if COUNTRIES and iso not in COUNTRIES:
+            continue
+        
         print('')
         print(iso,level)
 
@@ -259,7 +282,7 @@ if __name__ == '__main__':
             for p,t in procs:
                 if not p.is_alive():
                     procs.remove((p,t))
-                elif time()-t > 900:
+                elif time()-t > 60*60*6: # max 6 hr
                     p.terminate()
                     procs.remove((p,t))
 

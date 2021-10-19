@@ -1,0 +1,44 @@
+{
+    "ESRI": {
+        "GADM v3.6": 0.9964146783359905,
+        "Natural Earth v4.1": 0.9893942695609139,
+        "OCHA ROSEA": 0.9966522498411587,
+        "geoBoundaries (Open)": 0.9713081301361485,
+        "geoBoundaries (Humanitarian)": 0.9966522498411587
+    },
+    "GADM v3.6": {
+        "ESRI": 0.9961211901844544,
+        "Natural Earth v4.1": 0.9888156358002755,
+        "OCHA ROSEA": 0.999636738901121,
+        "geoBoundaries (Open)": 0.9691367376105375,
+        "geoBoundaries (Humanitarian)": 0.9996369899568293
+    },
+    "Natural Earth v4.1": {
+        "ESRI": 0.9912622180792088,
+        "GADM v3.6": 0.990974377616908,
+        "OCHA ROSEA": 0.9910680969574205,
+        "geoBoundaries (Open)": 0.9668814676930495,
+        "geoBoundaries (Humanitarian)": 0.9910680969574205
+    },
+    "OCHA ROSEA": {
+        "ESRI": 0.9961507713151343,
+        "GADM v3.6": 0.9994281344381718,
+        "Natural Earth v4.1": 0.9887027851552475,
+        "geoBoundaries (Open)": 0.9691956649477244,
+        "geoBoundaries (Humanitarian)": 1.0000000000080147
+    },
+    "geoBoundaries (Open)": {
+        "ESRI": 0.9443015000193854,
+        "GADM v3.6": 0.9424680802331715,
+        "Natural Earth v4.1": 0.9382265728776032,
+        "OCHA ROSEA": 0.9427221135144231,
+        "geoBoundaries (Humanitarian)": 0.9427223908648256
+    },
+    "geoBoundaries (Humanitarian)": {
+        "ESRI": 0.9961507713151343,
+        "GADM v3.6": 0.9994283854414896,
+        "Natural Earth v4.1": 0.9887027851552475,
+        "OCHA ROSEA": 1.0000000000080147,
+        "geoBoundaries (Open)": 0.9691959500866895
+    }
+}
