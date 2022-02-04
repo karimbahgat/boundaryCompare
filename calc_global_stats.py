@@ -21,7 +21,7 @@ MAXPROCS = 3
 
 
 def loop_country_levels():
-    url = 'https://raw.githubusercontent.com/wmgeolab/geoContrast/main/releaseData/geoContrast-meta.csv'
+    url = 'https://raw.githubusercontent.com/wmgeolab/geoContrast/stable/releaseData/geoContrast-meta.csv'
     raw = urlopen(url).read().decode('utf8')
     reader = csv.DictReader(raw.split('\n'))
     def key(row):

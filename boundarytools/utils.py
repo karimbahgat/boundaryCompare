@@ -1,5 +1,11 @@
 import numpy as np
 from shapely.geometry import asShape
+from zipfile import ZipFile
+import io
+
+import sys
+sys.path.append(r'C:\Users\kimok\Documents\GitHub\geoContrast')
+import topojson_simple
 
 def get_shapely(feat):
     if 'shapely' in feat:
@@ -58,16 +64,17 @@ def topo2geoj(data):
     #     coords = feat['geometry']['coordinates']
     #     geoj['features'].append(feat)
     
-    from topojson.utils import serialize_as_geojson
-    lyr = list(data['objects'].keys())[0]
-    geoj = serialize_as_geojson(data, objectname=lyr)
+    #from topojson.utils import serialize_as_geojson
+    #lyr = list(data['objects'].keys())[0]
+    #geoj = serialize_as_geojson(data, objectname=lyr)
+    geoj = topojson_simple.decode.geojson(data)
 
     return geoj
 
 def iter_geocontrast_metatable():
     from urllib.request import urlopen
     import csv
-    url = 'https://raw.githubusercontent.com/wmgeolab/geoContrast/main/releaseData/geoContrast-meta.csv'
+    url = 'https://raw.githubusercontent.com/wmgeolab/geoContrast/stable/releaseData/geoContrast-meta.csv'
     raw = urlopen(url).read().decode('utf8').split('\n')
     reader = csv.DictReader(raw, delimiter=',')
     for row in reader:
@@ -86,7 +93,13 @@ def find_geocontrast_sources(iso, level):
 def load_topojson_url(url, load_shapely=False):
     from urllib.request import urlopen
     import json
-    topoj = json.loads(urlopen(url).read())
+    if url.endswith('.zip'):
+        fobj = io.BytesIO(urlopen(url).read())
+        with ZipFile(fobj) as archive:
+            filename = url.split('/')[-1].replace('.zip','')
+            topoj = json.loads(archive.open(filename).read())
+    else:
+        topoj = json.loads(urlopen(url).read())
     coll = topo2geoj(topoj)
     if load_shapely:
         for feat in coll['features']:

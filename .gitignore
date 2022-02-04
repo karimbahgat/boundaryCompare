@@ -116,3 +116,5 @@ dmypy.json
 # Local output folders
 /output*
 temp/*
+global_relations/*
+global_stats/*

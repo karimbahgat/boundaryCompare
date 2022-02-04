@@ -18,14 +18,14 @@ from time import time
 # params
 
 OUTPUT_DIR = 'global_relations'
-SOURCES = []
+SOURCES = ['geoBoundaries (Open)', 'GADM v3.6', 'OSM-Boundaries', 'SALB', 'geoBoundaries (Humanitarian)', 'Natural Earth v4.1', 'IPUMS']
 IGNORE_SOURCES = []
 MAXPROCS = 3
-COUNTRIES = ['CUB']
+COUNTRIES = []
 
 
 def loop_country_levels():
-    url = 'https://raw.githubusercontent.com/wmgeolab/geoContrast/main/releaseData/geoContrast-meta.csv'
+    url = 'https://raw.githubusercontent.com/wmgeolab/geoContrast/stable/releaseData/geoContrast-meta.csv'
     raw = urlopen(url).read().decode('utf8')
     reader = csv.DictReader(raw.split('\n'))
     def key(row):
@@ -35,22 +35,13 @@ def loop_country_levels():
         yield iso,level
 
 
-def get_country_level_areas(country, level):    
+def get_country_level_areas(country, level):
     # first get all possible sources
     sourcedict = boundarytools.utils.find_geocontrast_sources(country, level)
     print('available sources:', sourcedict.keys())
 
-    # load all data
-    print('loading all data')
-    sourcedata = {}
-    for source,url in sourcedict.items():
-        if SOURCES and source not in SOURCES: continue
-        elif source in IGNORE_SOURCES: continue
-        #if 'geoBoundaries' in source:
-        #    url = url.replace('.topojson','.geojson')
-        #    coll = boundarytools.utils.load_geojson_url(url, load_shapely=True)
-        #else:
-        #    coll = boundarytools.utils.load_topojson_url(url, load_shapely=True)
+    # define how to load and prep each source 
+    def load_source(url):
         print('loading', url)
         coll = boundarytools.utils.load_topojson_url(url, load_shapely=True)
         # delete geojson repr to reduce memory (only need shapely)
@@ -59,41 +50,45 @@ def get_country_level_areas(country, level):
         # simplify
         print('simplifying')
         for feat in coll['features']:
-            feat['shapely'] = feat['shapely'].simplify(0.0001, True) # ca 10m
+            feat['shapely'] = feat['shapely'].simplify(0.01, True) # ca 1km
         # validating
         print('validating')
-        if not feat['shapely'].is_valid:
-            feat['shapely'] = feat['shapely'].buffer(0)
-        #for feat in coll['features']:
-        #    feat['shapely'] = make_valid(feat['shapely'])
-        sourcedata[source] = coll
-
-    # first calc feature areas of each source
-    print('calculating areas')
-    source_areas = {}
-    for source,coll in sourcedata.items():
-        areas = []
         for feat in coll['features']:
-            area,perim = geojson_area_perimeter(feat['shapely'].__geo_interface__)
-            areas.append(round(area, 1))
-        source_areas[source] = areas
+            if not feat['shapely'].is_valid:
+                feat['shapely'] = feat['shapely'].buffer(0)
+        return coll
 
-    # next calc relations bw all pairs of sources
-    print('calculating pairwise feature relations')
+    # calc relations bw all pairs of sources
+    source_areas = {}
     source_results_matrix = {}
     source_errors_matrix = {}
-    for source1,coll1 in sourcedata.items():
+    #for source1,coll1 in sourcedata.items():
+    for source1,url1 in sourcedict.items():
+        if SOURCES and source1 not in SOURCES: continue
+        elif source1 in IGNORE_SOURCES: continue
+        print('-->', source1)
+        coll1 = load_source(url1)
+
+        print('calc areas', url1)
+        areas = []
+        for feat in coll1['features']:
+            area,perim = geojson_area_perimeter(feat['shapely'].__geo_interface__)
+            areas.append(round(area, 1))
+        source_areas[source1] = areas
         
         source_results_row = {}
         source_errors_row = {}
         
-        for source2,coll2 in sourcedata.items():
+        for source2,url2 in sourcedict.items():
             if source2 == source1: continue
-            if source2 in IGNORE_SOURCES: continue
-            #print('')
-            print(source1, 'vs', source2)
+
+            if SOURCES and source2 not in SOURCES: continue
+            elif source2 in IGNORE_SOURCES: continue
+            print('-->', source1, 'vs', source2)
+            coll2 = load_source(url2)
 
             # calc feature pair areas
+            print('calculating pairwise feature relations')
             feature_pair_areas,feature_pair_errors = get_feature_pair_areas(coll1, coll2)
             source_results_row[source2] = feature_pair_areas
             if feature_pair_errors:
@@ -265,8 +260,8 @@ if __name__ == '__main__':
             continue
 
         # local
-        #process(iso, level)
-        #continue
+        process(iso, level)
+        continue
 
         # multiprocessing
         logfile = '{}-ADM{}-log.txt'.format(iso, level)
@@ -287,5 +282,5 @@ if __name__ == '__main__':
                     procs.remove((p,t))
 
     # waiting for last ones
-    for p,t in procs:
-        p.join()
+    #for p,t in procs:
+    #    p.join()
