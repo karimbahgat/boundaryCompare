@@ -16,6 +16,7 @@ import itertools
 # params
 
 OUTPUT_DIR = 'global_stats'
+REPLACE = True
 IGNORE_SOURCES = []
 MAXPROCS = 3
 
@@ -29,7 +30,6 @@ def loop_country_levels():
     iso_levels = sorted(set([key(row) for row in reader]))
     for iso,level in iso_levels:
         yield iso,level
-
 
 def get_country_level_stats(country, level):
     #results = {}
@@ -50,54 +50,59 @@ def get_country_level_stats(country, level):
     except:
         return None
 
-    # get all sources
-    sources = set()
-    for src,relations2 in relations.items():
-        sources.add(src)
-        for src2 in relations2.keys():
-            sources.add(src2)
-
-    # calc probability similar for each feature
-    probabilities = {}
+    # collect pairwise source similarities
+    source_similarities = {}
     for src,relations2 in relations.items():
         As = areas[src]
-        probabilities_row = {}
+        source_similarities_row = {}
         for src2,featurepairs in relations2.items():
             print('')
             print(src,src2)
             Bs = areas[src2]
-            # probabilities for each feature
-            featureprobs = feature_probabilities(As, Bs, featurepairs)
-            #print('featureprobs',featureprobs)
-            # get total source prob by taking probability OR weighted by share of area
-            prob = 0
-            Atot = sum(As)
-            for A,fprob in zip(As, featureprobs):
-                Aprob = A / Atot
-                wprob = fprob * Aprob
-                prob += wprob
-            print('prob',prob)
-            probabilities_row[src2] = prob
-        probabilities[src] = probabilities_row
+
+            # for each feat add various area measurements
+            mainArea = sum(As)
+            comparisonArea = sum(Bs)
+            isecs = [AB for i1,i2,(Adiff,Bdiff,AB) in featurepairs]
+            isecArea = sum(isecs)
+            print(f'A {mainArea} B {comparisonArea} isec {isecArea}')
+
+            # decompose into Adiff, Bdiff, and union
+            mainDiffArea = (1 - (isecArea / mainArea)) * mainArea
+            comparisonDiffArea = (1 - (isecArea / comparisonArea)) * comparisonArea
+            unionArea = mainDiffArea + comparisonDiffArea + isecArea
+            print(f'Adiff {mainDiffArea} Bdiff {comparisonDiffArea} union {unionArea}')
+
+            # calc perc of matching
+            matches = match_features(As, Bs, featurepairs)
+            match_areas = [stats['within'] * As[i1]
+                           for i1,i2,stats in matches if stats]
+            matchArea = sum(match_areas)
+            percArea = matchArea / unionArea * 100
+            source_similarities_row[src2] = percArea
+            print(f'match {matchArea} perc {percArea}')
+
+        source_similarities[src] = source_similarities_row
 
     # return dict of source pairs, each with a single probability/similarity metric
-    return probabilities
+    return source_similarities
 
-def feature_probabilities(As, Bs, relations):
-    # this function returns a list of probabilities for a particular source combination
-    # each list entry is the probability that each feature is the same in the other source
+def match_features(As, Bs, relations):
+    # this function returns a list of matches for a particular source combination
+    # each list entry is the match of each feature with the most similar feature in the other source
 
     # create relations lookup dict
     key = lambda x: x[0] # group by row index
     relations_lookup = dict([(k,list(group)) for k,group in itertools.groupby(sorted(relations, key=key), key=key)])
 
-    # calc probabilities
-    probabilities = []
+    # calc similarities
+    similarities = []
     for i,A in enumerate(As):
         related = relations_lookup.get(i, []) # if no related then prob = 0
-        # calc total probability that feature A is in the other source
-        prob = 0
+        # calc similarity of feature A with all features in the other source
         A = As[i] # could also be Adiff+AB
+
+        simils = []
         for _,i2,(Adiff,Bdiff,AB) in related:
             AorB = sum([Adiff,Bdiff,AB])
             B = Bs[i2] # could also be Bdiff+AB
@@ -106,13 +111,27 @@ def feature_probabilities(As, Bs, relations):
                 continue
             equality = AB / AorB
             within = AB / A
-            contains = AB / B
-            pairprob = equality * within # ie probsame * probwithin
-            prob += pairprob # probability OR
+            stats = {'equality':equality, 'within':within}
+            simils.append((i, i2, stats))
 
-        probabilities.append(prob)
+        if simils:
+            best = sorted(simils, key=lambda x: x[-1]['equality'])[-1]
+            similarities.append(best)
+        else:
+            similarities.append((i,None,None))
+
+    # only match the best among all in source B
+    for i,i2,stats in similarities:
+        othermatches = [(_i,_i2,_stats) for _i,_i2,_stats in similarities if _i2 == i2]
+        bestmatch = sorted(othermatches, key=lambda x: x[-1]['equality'])[-1]
+        if i == bestmatch[0]:
+            # this is the best match, keep it
+            pass
+        else:
+            # this is not the best match, set match to null
+            similarities[i] = (i, None, None)
     
-    return probabilities
+    return similarities
 
 
 def process(iso, level):
@@ -162,7 +181,7 @@ if __name__ == '__main__':
         # skip if stats already exists
         filename = '{}-ADM{}-stats.json'.format(iso, level)
         path = os.path.join(OUTPUT_DIR, filename)
-        if os.path.lexists(path):
+        if not REPLACE and os.path.lexists(path):
             print('already exists, skipping')
             continue
 
