@@ -20,7 +20,7 @@ from time import time
 OUTPUT_DIR = 'global_relations'
 SOURCES = ['geoBoundaries (Open)', 'GADM v3.6', 'OSM-Boundaries', 'SALB', 'geoBoundaries (Humanitarian)', 'Natural Earth v4.1', 'IPUMS']
 IGNORE_SOURCES = []
-MAXPROCS = 3
+MAXPROCS = 2
 COUNTRIES = []
 
 
@@ -260,8 +260,8 @@ if __name__ == '__main__':
             continue
 
         # local
-        process(iso, level)
-        continue
+        #process(iso, level)
+        #continue
 
         # multiprocessing
         logfile = '{}-ADM{}-log.txt'.format(iso, level)
@@ -277,10 +277,10 @@ if __name__ == '__main__':
             for p,t in procs:
                 if not p.is_alive():
                     procs.remove((p,t))
-                elif time()-t > 60*60*6: # max 6 hr
+                elif time()-t > 60*60*2: # max 2 hr
                     p.terminate()
                     procs.remove((p,t))
 
     # waiting for last ones
-    #for p,t in procs:
-    #    p.join()
+    for p,t in procs:
+        p.join()

@@ -16,9 +16,9 @@ import itertools
 # params
 
 OUTPUT_DIR = 'global_stats'
-REPLACE = True
+REPLACE = False
 IGNORE_SOURCES = []
-MAXPROCS = 3
+MAXPROCS = 4
 
 
 def loop_country_levels():
@@ -31,7 +31,7 @@ def loop_country_levels():
     for iso,level in iso_levels:
         yield iso,level
 
-def get_country_level_stats(country, level):
+def get_country_level_stats(iso, level):
     #results = {}
 
     # open areas
@@ -120,18 +120,23 @@ def match_features(As, Bs, relations):
         else:
             similarities.append((i,None,None))
 
-    # only match the best among all in source B
+    # do a second pass so that a match is only kept if it's the best in both sources
+    similarities2 = []
     for i,i2,stats in similarities:
+        similarities2.append((i,i2,stats))
+        if i2 is None:
+            continue
         othermatches = [(_i,_i2,_stats) for _i,_i2,_stats in similarities if _i2 == i2]
+        assert len(othermatches) >= 1
         bestmatch = sorted(othermatches, key=lambda x: x[-1]['equality'])[-1]
         if i == bestmatch[0]:
             # this is the best match, keep it
             pass
         else:
             # this is not the best match, set match to null
-            similarities[i] = (i, None, None)
+            similarities2[i] = (i, None, None)
     
-    return similarities
+    return similarities2
 
 
 def process(iso, level):
@@ -186,8 +191,8 @@ if __name__ == '__main__':
             continue
 
         # local
-        process(iso, level)
-        continue
+        #process(iso, level)
+        #continue
 
         # multiprocessing
         logfile = '{}-ADM{}-log.txt'.format(iso, level)
