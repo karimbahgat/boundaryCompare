@@ -75,7 +75,8 @@ def makemap(feat1, feat2, data2, mapname):
     _d = pg.VectorData()
     _d.add_feature([], isec.__geo_interface__)
     #fisec = pg.vector.data.Feature(_d, [], isec.__geo_interface__)
-    color = (100,100,100)
+    #color = (100,100,100)
+    color = (30, 144, 255, 200)
     m.add_layer(_d, fillcolor=color, outlinecolor=color, outlinewidth='4px',
                 legendoptions={'title':'intersection = {} km2'.format(round(isec.area,2))},
                 )

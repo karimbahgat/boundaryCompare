@@ -32,7 +32,9 @@ def makemap(geoj, country, source, level):
     d = pg.VectorData()
     for f in geoj['features']:
         d.add_feature([], f['geometry'])
-    m.add_layer(d, fillcolor=(45,107,26))
+    #color = pg.renderer.rgb('blue')[:3] + (200,)
+    color = (30, 144, 255, 200)
+    m.add_layer(d, fillcolor=color)
     
     m.zoom_bbox(*d.bbox, geographic=True)
     m.save('figures/temporal-{}-ADM{}-{}.png'.format(country, level, source))
@@ -46,7 +48,15 @@ def makemap(geoj, country, source, level):
 ##    makemap(geoj, iso, src, lvl)
 
 # load germany sources
-iso,lvl = 'MLI', 1
+##iso,lvl = 'DEU', 1
+##sources = bt.utils.find_geocontrast_sources(iso, lvl)
+##for src,url in sources.items():
+##    if src == 'OSM-Boundaries': continue
+##    geoj = bt.utils.load_topojson_url(url)
+##    makemap(geoj, iso, src, lvl)
+
+# load cote divoire sources
+iso,lvl = 'CIV', 1
 sources = bt.utils.find_geocontrast_sources(iso, lvl)
 for src,url in sources.items():
     if src == 'OSM-Boundaries': continue

@@ -3,6 +3,7 @@ import boundarytools
 import numpy as np
 from pyproj import Geod
 geod = Geod(ellps="WGS84")
+from shapely.geometry import asShape
 #from shapely.validation import make_valid
 
 import os
@@ -14,6 +15,7 @@ import traceback
 import multiprocessing as mp
 import datetime
 from time import time
+import tempfile
 
 # params
 
@@ -21,7 +23,7 @@ OUTPUT_DIR = 'global_relations'
 SOURCES = ['geoBoundaries (Open)', 'GADM v3.6', 'OSM-Boundaries', 'SALB', 'geoBoundaries (Humanitarian)', 'Natural Earth v4.1', 'IPUMS']
 IGNORE_SOURCES = []
 MAXPROCS = 2
-COUNTRIES = []
+COUNTRIES = ['CAN','NOR']
 
 
 def loop_country_levels():
@@ -58,6 +60,29 @@ def get_country_level_areas(country, level):
                 feat['shapely'] = feat['shapely'].buffer(0)
         return coll
 
+    # download and prep all sources in local temp files
+    print('downloading and prepping all source data')
+    localfiles = {}
+    for source,url in sourcedict.items():
+        if SOURCES and source not in SOURCES: continue
+        elif source in IGNORE_SOURCES: continue
+        print('-->', source)
+        coll = load_source(url)
+        for f in coll['features']:
+            f['geometry'] = f['shapely'].__geo_interface__
+            del f['shapely']
+        tmp = tempfile.NamedTemporaryFile(mode='w+')
+        tmp.write(json.dumps(coll))
+        localfiles[url] = tmp
+        
+    def load_local_source(url):
+        tmp = localfiles[url]
+        tmp.seek(0)
+        coll = json.loads(tmp.read())
+        for f in coll['features']:
+            f['shapely'] = asShape(f['geometry'])
+        return coll
+
     # calc relations bw all pairs of sources
     source_areas = {}
     source_results_matrix = {}
@@ -67,7 +92,7 @@ def get_country_level_areas(country, level):
         if SOURCES and source1 not in SOURCES: continue
         elif source1 in IGNORE_SOURCES: continue
         print('-->', source1)
-        coll1 = load_source(url1)
+        coll1 = load_local_source(url1)
 
         print('calc areas', url1)
         areas = []
@@ -85,7 +110,7 @@ def get_country_level_areas(country, level):
             if SOURCES and source2 not in SOURCES: continue
             elif source2 in IGNORE_SOURCES: continue
             print('-->', source1, 'vs', source2)
-            coll2 = load_source(url2)
+            coll2 = load_local_source(url2)
 
             # calc feature pair areas
             print('calculating pairwise feature relations')
@@ -115,6 +140,10 @@ def get_country_level_areas(country, level):
         source_results_matrix[source1] = source_results_row
         if source_errors_row:
             source_errors_matrix[source1] = source_errors_row
+
+    # close and clear all local temp files
+    for fobj in localfiles.values():
+        fobj.close()
 
     return source_areas, source_results_matrix, source_errors_matrix
 

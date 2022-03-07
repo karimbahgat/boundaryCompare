@@ -8,6 +8,9 @@ import csv
 from urllib.request import urlopen
 import pythongis as pg
 
+# params
+SOURCES = ['geoBoundaries (Open)', 'GADM v3.6', 'OSM-Boundaries', 'SALB', 'geoBoundaries (Humanitarian)', 'Natural Earth v4.1', 'IPUMS']
+
 # load country boundaries
 #url = 'https://www.geoboundaries.org/data/geoBoundariesCGAZ-3_0_0/ADM0/simplifyRatio_10/geoBoundariesCGAZ_ADM0.geojson'
 #geoj = boundarytools.utils.load_geojson_url(url)
@@ -31,6 +34,9 @@ def get_country_level_stats(iso, level):
                         if r['boundaryISO']==iso
                         and r['boundaryType']=='ADM{}'.format(level)
                        ]
+    if SOURCES:
+        countrylevelrows = [r for r in countrylevelrows
+                            if r['boundarySource-1'] in SOURCES]
     lineres = [r['boundaryCount'] for r in countrylevelrows]
     lineres = [float(v) for v in lineres if v != 'Unknown']
     lineres = [v for v in lineres if not math.isnan(v)]
@@ -93,14 +99,14 @@ def save_map(geoj, color_by, title, output, reverse_colors=False):
 # visualize country year stdev
 for level in range(0, 4+1):
     print(level)
-    #save_map(geoj, 'admincounts_mean{}'.format(level),
-    #         'ADM{} Average\n# of Divisions'.format(level),
-    #         'figures/bcount_mean{}.png'.format(level),
-    #         reverse_colors=True)
-    #save_map(geoj, 'admincounts_std{}'.format(level),
-    #         'ADM{} Variation in\n# of Divisions'.format(level),
-    #         'figures/bcount_std{}.png'.format(level),
-    #         reverse_colors=True)
+    save_map(geoj, 'admincounts_mean{}'.format(level),
+             'ADM{} Average\n# of Divisions'.format(level),
+             'figures/bcount_mean{}.png'.format(level),
+             reverse_colors=True)
+    save_map(geoj, 'admincounts_std{}'.format(level),
+             'ADM{} Variation in\n# of Divisions'.format(level),
+             'figures/bcount_std{}.png'.format(level),
+             reverse_colors=True)
     save_map(geoj, 'admincounts_stdperc{}'.format(level),
              'ADM{} Variation in\n# of Divisions (%)'.format(level),
              'figures/bcount_stdperc{}.png'.format(level),

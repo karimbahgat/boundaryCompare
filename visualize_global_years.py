@@ -8,6 +8,9 @@ import csv
 from urllib.request import urlopen
 import pythongis as pg
 
+# params
+SOURCES = ['geoBoundaries (Open)', 'GADM v3.6', 'OSM-Boundaries', 'SALB', 'geoBoundaries (Humanitarian)', 'Natural Earth v4.1', 'IPUMS']
+
 # load country boundaries
 #url = 'https://www.geoboundaries.org/data/geoBoundariesCGAZ-3_0_0/ADM0/simplifyRatio_10/geoBoundariesCGAZ_ADM0.geojson'
 #geoj = boundarytools.utils.load_geojson_url(url)
@@ -31,6 +34,9 @@ def get_country_level_stats(iso, level):
                         if r['boundaryISO']==iso
                         and r['boundaryType']=='ADM{}'.format(level)
                        ]
+    if SOURCES:
+        countrylevelrows = [r for r in countrylevelrows
+                            if r['boundarySource-1'] in SOURCES]
     yrs = [r['boundaryYearRepresented'] for r in countrylevelrows]
     yrs = [int(yr) for yr in yrs if yr != 'Unknown']
     stats = {}

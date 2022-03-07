@@ -32,7 +32,8 @@ def makemap(geoj, source, level):
     d = pg.VectorData()
     for f in geoj['features']:
         d.add_feature([], f['geometry'])
-    m.add_layer(d, fillcolor=(45,107,26))
+    color = (30, 144, 255, 200)
+    m.add_layer(d, fillcolor=color) #(45,107,26))
     
     m.zoom_bbox(*d.bbox, geographic=True)
     m.save('figures/adminlevels-{}-ADM{}.png'.format(source, level))
