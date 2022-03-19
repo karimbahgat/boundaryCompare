@@ -19,6 +19,7 @@ print(countries.fields)
 for f in geoj['features']:
     countries.add_feature(f['properties'], f['geometry'])
 
+'''
 def get_landsat_raster(bbox):
     from landsatxplore.api import API
     user = 'kbahgat'
@@ -45,6 +46,51 @@ def get_landsat_raster(bbox):
         path = ee._download(url, 'temp', timeout=300, chunk_size=1024*10)
         r = pg.RasterData(path)
         yield r
+'''
+
+# preload global satims
+if 0:
+    import urllib
+    print('dl west')
+    urllib.request.urlretrieve('https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_west.tif',
+                       'temp/land_shallow_topo_west.tif'
+                      )
+    print('dl east')
+    urllib.request.urlretrieve('https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_east.tif',
+                       'temp/land_shallow_topo_east.tif'
+                      )
+    
+# load global sat ims
+print('open global sats')
+import PIL.Image
+PIL.Image.MAX_IMAGE_PIXELS = 466560000*2
+
+scale = 180.0/21600
+#affine = [scale,0,-180,
+#         0,-scale,90]
+#sat_west = pg.RasterData('temp/land_shallow_topo_west.tif', affine=affine)
+#sat_west.set_geotransform(affine=affine)
+affine = [scale,0,0,
+         0,-scale,90]
+sat_east = pg.RasterData('temp/land_shallow_topo_east.tif', affine=affine)
+sat_east.set_geotransform(affine=affine)
+
+def get_sat(bbox, padding=0):
+    if padding:
+        xmin,ymax,xmax,ymin = bbox
+        w,h = abs(xmax-xmin),abs(ymax-ymin)
+        xpad,ypad = w*padding, h*padding
+        bbox = [xmin-xpad,ymax+ypad,xmax+xpad,ymin-ypad]
+    if bbox[0] < 0:
+        _bbox = list(bbox)
+        _bbox[2] = min(0, _bbox[2])
+        print(_bbox)
+        yield sat_west.manage.crop(_bbox)
+    if bbox[2] >= 0:
+        _bbox = list(bbox)
+        _bbox[0] = max(0, _bbox[0])
+        print(_bbox)
+        yield sat_east.manage.crop(_bbox)
 
 # define map
 def makemap(geoj, geoj2, zoomfunc, zoomfunc2, name):
@@ -63,8 +109,8 @@ def makemap(geoj, geoj2, zoomfunc, zoomfunc2, name):
     for f in geoj['features']:
         d.add_feature(f['properties'], f['geometry'])
     d = d.select(zoomfunc)
-    m.add_layer(d, fillcolor=(170,170,170), outlinecolor='blue', outlinewidth='3px')
-    m.add_layer(d.convert.to_points('vertex'), fillcolor='blue', fillsize='5px', outlinecolor=None)
+    m.add_layer(d, fillcolor=(222,222,255,55), outlinecolor='blue', outlinewidth='3px', legend=False)
+    m.add_layer(d.convert.to_points('vertex'), fillcolor='blue', fillsize='5px', outlinecolor=None, legendoptions={'title':'geoBoundaries'})
 
     # source2
     d = pg.VectorData()
@@ -72,21 +118,60 @@ def makemap(geoj, geoj2, zoomfunc, zoomfunc2, name):
     for f in geoj2['features']:
         d.add_feature(f['properties'], f['geometry'])
     d = d.select(zoomfunc2)
-    m.add_layer(d, fillcolor=None, outlinecolor='red', outlinewidth='3px')
-    m.add_layer(d.convert.to_points('vertex'), fillcolor='red', fillsize='5px', outlinecolor=None)
-
-    bbox = m.layers[0].data.bbox
-    print(bbox)
-    w,h = bbox[2]-bbox[0], bbox[3]-bbox[1]
-    bbox = [bbox[0], bbox[1], bbox[0]+w/4.0, bbox[1]+h/4.0]
-    print(bbox)
-
-    for r in get_landsat_raster(bbox):
-        print(r)
-        m.add_layer(r)
+    m.add_layer(d, fillcolor=None, outlinecolor='red', outlinewidth='3px', legend=False)
+    m.add_layer(d.convert.to_points('vertex'), fillcolor='red', fillsize='5px', outlinecolor=None, legendoptions={'title':'Natural Earth'})
     
-    m.zoom_bbox(*bbox, geographic=True)
+    # zoom
+    m.zoom_auto()
+    #m.zoom_out(1.1)
+    #m.zoom_in(3)
+    m.offset('-35%w', '30%h')
+    m.zoom_in(3)
+    m.offset('-33%w', 0)
+    m.zoom_in(3.5)
+
+    # add satellite base layer
+    bbox = m.bbox
+    print(bbox)
+    for sat in get_sat(bbox, padding=0.1):
+    #for sat in [pg.RasterData('temp/localsat.tif')]: 
+        for b in sat.bands:
+            b.compute('min(val+10, 255)')
+        m.add_layer(sat)
+        m.move_layer(-1, 0)
+
+    # save zoomed in map
+    m.add_legend({'direction':'s', 'outlinecolor':None}) #, xy=('2%w','93%h'), anchor='sw')
+    opts = dict(length=0.09,
+                labeloptions={'textcolor':(255,255,255)},
+                symboloptions={'fillcolor':(255,255,255)})
+    m.add_scalebar(opts) #, xy=('4%w','98%h'), anchor='sw') 
+    m.save('figures/resolution-{}-zoomed.png'.format(name))
+
+    # create rectangle layer for current map view
+    x1,y1,x2,y2 = bbox
+    ring = [(x1,y1),(x2,y1),(x2,y2),(x1,y2),(x1,y1)]
+    poly = {'type':'Polygon', 'coordinates':[ring]}
+    d = pg.VectorData()
+    d.add_feature([], poly)
+    m.add_layer(d, fillcolor=None, outlinecolor="black", outlinewidth='5px', legend=False)
+
+    # zoom out
+    m.zoom_auto()
     m.zoom_out(1.1)
+
+    # add satellite base layer for new zoom
+    bbox = m.bbox
+    print(bbox)
+    for sat in get_sat(bbox, padding=0.1):
+    #for sat in [pg.RasterData('temp/localsat.tif')]: 
+        for b in sat.bands:
+            b.compute('min(val+10, 255)')
+        m.add_layer(sat)
+        m.move_layer(-1, 0)
+
+    # save zoomed out map with zoom rectangle
+    m.render()
     m.save('figures/resolution-{}.png'.format(name))
 
 # load data sources
