@@ -70,10 +70,10 @@ scale = 180.0/21600
 #         0,-scale,90]
 #sat_west = pg.RasterData('temp/land_shallow_topo_west.tif', affine=affine)
 #sat_west.set_geotransform(affine=affine)
-affine = [scale,0,0,
-         0,-scale,90]
-sat_east = pg.RasterData('temp/land_shallow_topo_east.tif', affine=affine)
-sat_east.set_geotransform(affine=affine)
+#affine = [scale,0,0,
+#         0,-scale,90]
+#sat_east = pg.RasterData('temp/land_shallow_topo_east.tif', affine=affine)
+#sat_east.set_geotransform(affine=affine)
 
 def get_sat(bbox, padding=0):
     if padding:
@@ -91,6 +91,119 @@ def get_sat(bbox, padding=0):
         _bbox[0] = max(0, _bbox[0])
         print(_bbox)
         yield sat_east.manage.crop(_bbox)
+
+# define sat tile loading
+# some parts from https://jimmyutterstrom.com/blog/2019/06/05/map-tiles-to-geotiff/
+import io
+from math import log, tan, radians, cos, pi, floor, ceil
+from PIL import Image
+from urllib.request import urlopen
+
+def xyz2merc(x, y, zoom):
+    n = (2 ** zoom) or 1 # only 1 tile at zoom level 0
+    # get global mercator bounds
+    # https://www.maptiler.com/google-maps-coordinates-tile-bounds-projection/#4/87.28/18.02
+    #xmin,ymin,xmax,ymax = [-20037508.342789244, -20037508.342789244, 20037508.342789244, 20037508.342789244]
+    xmin,ymin,xmax,ymax = [-20026376.39, -20048966.10, 20026376.39, 20048966.10]
+    width,height = xmax-xmin, ymax-ymin
+    # convert xy to 0-1 range
+    x /= n
+    y /= n
+    # convert to mercator
+    x = xmin + width * x
+    y = ymin + height * (1-y)
+    return x,y
+
+def sec(x):
+    return(1/cos(x))
+
+def latlon_to_xyz(lat, lon, z):
+    tile_count = pow(2, z)
+    x = (lon + 180) / 360
+    y = (1 - log(tan(radians(lat)) + sec(radians(lat))) / pi) / 2
+    return(tile_count*x, tile_count*y)
+
+def bbox_to_xyz(lon_min, lon_max, lat_min, lat_max, z):
+    x_min, y_max = latlon_to_xyz(lat_min, lon_min, z)
+    x_max, y_min = latlon_to_xyz(lat_max, lon_max, z)
+    return(floor(x_min), floor(x_max),
+           floor(y_min), floor(y_max))
+
+def fetch_tile(x, y, z, tile_server):
+    url = tile_server.replace(
+        "{x}", str(x)).replace(
+        "{y}", str(y)).replace(
+        "{z}", str(z))
+    print(url)
+    fobj = io.BytesIO(urlopen(url).read())
+    img = Image.open(fobj)
+    return img
+
+def get_sat_tiles(mapp, padding=0):
+    '''Retrieve and merge xyz tiles into a single RasterData
+    Only works for wgs84 maps so far.
+    '''
+    bbox = mapp.bbox
+    xs,ys = [bbox[0],bbox[2]], [bbox[1],bbox[3]]
+    bbox = min(xs),min(ys),max(xs),max(ys)
+    #tile_server = 'https://api.maptiler.com/tiles/satellite/{z}/{x}/{y}.jpg?key=' + 'aknzJQRnZg32XVVPrcYH'
+    #tile_server = 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+    tile_server = 'http://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}'
+
+    # convert to latlon if needed
+    # ... 
+
+    # determine zoom level from map extent and size
+    # how many 256 tiles fit in map
+    from math import floor, ceil, log10
+    w,h = mapp.width,mapp.height
+    tilexfit,tileyfit = w/256, h/256
+    print(tilexfit,tileyfit)
+    # how many map extents fit in world
+    dx,dy = bbox[2]-bbox[0], bbox[3]-bbox[1]
+    extxfit,extyfit = 360/dx, 180/dy
+    print(extxfit,extyfit)
+    # how many tiles total needed to cover entire world
+    tilextot,tileytot = tilexfit*extxfit, tileyfit*extyfit
+    print(tilextot,tileytot)
+    # n = 2**z  ->  log n = z * log 2  ->  log n / log 2 = z
+    n = tilextot
+    z = floor( log10(n) / log10(2) )
+    print(z)
+    
+    # padding
+    if padding:
+        xmin,ymin,xmax,ymax = bbox
+        w,h = abs(xmax-xmin),abs(ymax-ymin)
+        xpad,ypad = w*padding, h*padding
+        bbox = [xmin-xpad,ymin-ypad,xmax+xpad,ymax+ypad]
+
+    # loop range of xy coords within bbox
+    print('bbox',bbox)
+    #xmax,ymax,xmin,ymin = bbox_to_xyz(*bbox, z) # xy coords
+    xmin,ymin = latlon_to_xyz(bbox[3], bbox[0], z) # note that input is ymax,xmin
+    xmin,ymin = map(floor, (xmin,ymin))
+    xmax,ymax = xmin+floor(tilexfit), ymin+floor(tileyfit)
+    print('tile ranges',xmin,ymin,xmax,ymax)
+    for x in range(xmin, xmax + 1):
+        for y in range(ymin, ymax + 1):
+            print(f"{x},{y},{z}")
+            img = fetch_tile(x, y, z, tile_server)
+            crs = '+init=EPSG:3857'
+            _x1,_y1 = xyz2merc(x, y+1, z)
+            _x2,_y2 = xyz2merc(x+1, y, z)
+            #georef = {'bbox':(_x1,_y1,_x2,_y2)}
+            georef = {'xscale':(_x2-_x1)/(img.size[0]-1), # -1 only to cover gaps
+                      'yscale':-(_y2-_y1)/(img.size[1]-1), # -1 only to cover gaps
+                      'xoffset':_x1,
+                      'yoffset':_y2,
+                      } 
+            print(georef)
+            r = pg.RasterData(image=img, crs=crs)
+            r.set_geotransform(**georef)
+            print(r)
+            yield r
+    
 
 # define map
 def makemap(geoj, geoj2, zoomfunc, zoomfunc2, name):
@@ -133,10 +246,11 @@ def makemap(geoj, geoj2, zoomfunc, zoomfunc2, name):
     # add satellite base layer
     bbox = m.bbox
     print(bbox)
-    for sat in get_sat(bbox, padding=0.1):
+    for sat in get_sat_tiles(m):
+    #for sat in get_sat(bbox, padding=0.1):
     #for sat in [pg.RasterData('temp/localsat.tif')]: 
-        for b in sat.bands:
-            b.compute('min(val+10, 255)')
+        #for b in sat.bands:
+        #    b.compute('min(val+10, 255)')
         m.add_layer(sat)
         m.move_layer(-1, 0)
 
@@ -154,7 +268,7 @@ def makemap(geoj, geoj2, zoomfunc, zoomfunc2, name):
     poly = {'type':'Polygon', 'coordinates':[ring]}
     d = pg.VectorData()
     d.add_feature([], poly)
-    m.add_layer(d, fillcolor=None, outlinecolor="black", outlinewidth='5px', legend=False)
+    m.add_layer(d, fillcolor=None, outlinecolor="black", outlinewidth='8px', legend=False)
 
     # zoom out
     m.zoom_auto()
@@ -163,10 +277,11 @@ def makemap(geoj, geoj2, zoomfunc, zoomfunc2, name):
     # add satellite base layer for new zoom
     bbox = m.bbox
     print(bbox)
-    for sat in get_sat(bbox, padding=0.1):
+    for sat in get_sat_tiles(m):
+    #for sat in get_sat(bbox, padding=0.1):
     #for sat in [pg.RasterData('temp/localsat.tif')]: 
-        for b in sat.bands:
-            b.compute('min(val+10, 255)')
+        #for b in sat.bands:
+        #    b.compute('min(val+10, 255)')
         m.add_layer(sat)
         m.move_layer(-1, 0)
 
