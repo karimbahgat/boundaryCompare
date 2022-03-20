@@ -42,14 +42,13 @@ def makemap(feat1, feat2, data2, mapname):
 
     #crs = '+proj=aea +lat_1=27 +lat_2=45 +lat_0=35 +lon_0=105 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +no_defs'
     
-    m = pg.renderer.Map(1200,1000,background='white') #,crs=crs)
+    m = pg.renderer.Map(1100,1000,background='white') #,crs=crs)
 
     # countries? 
     #m.add_layer(countries, fillcolor='lightgray', outlinewidth='0.5px')
 
-    # data 2
-    color = pg.renderer.rgb('red')
-    m.add_layer(data2, fillcolor='lightgray', outlinecolor=color, outlinewidth='3px',
+    # background gray
+    m.add_layer(data2, fillcolor='lightgray', outlinecolor=None, 
                 legend=False, #legendoptions={'title':'source B comparisons'}
                 )
 
@@ -59,16 +58,16 @@ def makemap(feat1, feat2, data2, mapname):
     print('union area', union.area)
     print('% similarity', simil)
 
-    # feat 1
+    # feat 1 nonmatch
     color = pg.renderer.rgb('blue')
-    m.add_layer(feat1.dataset(), fillcolor=color[:3]+(100,), outlinecolor=None, outlinewidth='3px',
-                legendoptions={'title':'source A unit'},
+    m.add_layer(feat1.dataset(), fillcolor=color[:3]+(100,), outlinecolor=None,
+                legend=False, #legendoptions={'title':'source A unit'},
                 )
 
-    # feat 2
+    # feat 2 nonmatch
     color = pg.renderer.rgb('red')
-    m.add_layer(feat2.dataset(), fillcolor=color[:3]+(100,), outlinecolor=None, outlinewidth='3px',
-                legendoptions={'title':'source B unit'},
+    m.add_layer(feat2.dataset(), fillcolor=color[:3]+(100,), outlinecolor=None,
+                legend=False, #legendoptions={'title':'source B match = {}'.format(feat2['NAME_1'])},
                 )
 
     # isec
@@ -81,22 +80,31 @@ def makemap(feat1, feat2, data2, mapname):
                 legendoptions={'title':'intersection = {} km2'.format(round(isec.area,2))},
                 )
 
-    # union
-    _d = pg.VectorData()
-    _d.add_feature([], union.__geo_interface__)
-    #funion = pg.vector.data.Feature(data2, [], union.__geo_interface__)
-    m.add_layer(_d, fillcolor=None, outlinecolor='black', outlinewidth='5px',
-                legendoptions={'title':'union = {} km2'.format(round(union.area,2))},
+    # source B red outlines
+    color = pg.renderer.rgb('red')
+    m.add_layer(data2, fillcolor=None, outlinecolor=color, outlinewidth='1px',
+                legendoptions={'title':'source B comparisons'}
+                )
+
+    # feat 2
+    m.add_layer(feat2.dataset(), fillcolor=None, outlinecolor='red', outlinewidth='5px',
+                legendoptions={'title':'source B match = {}'.format(feat2['NAME_1'])},
+                )
+
+    # feat 1
+    m.add_layer(feat1.dataset(), fillcolor=None, outlinecolor='black', outlinewidth='5px',
+                legendoptions={'title':'source A unit = {}'.format(feat1['shapeName'])},
                 )
     
     m.zoom_auto()
     m.zoom_out(1.2)
 
-    title = 'Match Similarity = {}%'.format(round(simil, 1))
+    title = '{}% Match'.format(round(simil, 1))
     titleoptions = {'fillcolor':None, 'outlinecolor':None, 'xy':('1%w','1%h'), 'anchor':'nw'}
     m.title = title
     m.titleoptions = titleoptions
-    m.add_legend({'fillcolor':None, 'outlinecolor':None, 'direction':'s'}, #, 'title':title, 'titleoptions':titleoptions},
+    legend_layers = [m.layers[i] for i in [-1,-2,-4,-3]]
+    m.add_legend({'layers':legend_layers, 'fillcolor':None, 'outlinecolor':None, 'direction':'s'}, #, 'title':title, 'titleoptions':titleoptions},
                  xy=('1%w','7%h'), anchor='nw')
     m.save('figures/similarity-{}.png'.format(mapname))
 
@@ -106,28 +114,21 @@ sources = bt.utils.find_geocontrast_sources(iso, lvl)
 
 geoj = bt.utils.load_topojson_url(sources['geoBoundaries (Open)'])
 d = geoj2data(geoj)
-d = d.select(lambda f: f['shapeName']=='Ad Dakhiliyah')
 
 geoj2 = bt.utils.load_topojson_url(sources['GADM v3.6'])
 d2 = geoj2data(geoj2)
 
-# select overlapping
-_d2 = pg.VectorData(fields=d2.fields)
-shp1 = d[1].get_shapely()
-for f2 in d2:
-    if f2.get_shapely().intersects(shp1):
-        _d2.add_feature(f2.row, f2.geometry)
-d2 = _d2
-#d2 = d2.manage.where(d, 'intersects')
-
-f1 = d[1]
-name1 = f1['shapeName']
-sortby = lambda feat2: similarity(f1,feat2)[-1]
-d2.sort(sortby, reverse=True)
-for i,f2 in enumerate(d2):
+for i,f1 in enumerate(d):
     i += 1 # 1-based
+    name1 = f1['shapeName']
+    # get best match
+    sortby = lambda feat2: similarity(f1,feat2)[-1]
+    f2 = sorted(d2, key=sortby)[-1]
+    if similarity(f1, f2)[-1] == 0:
+        continue
     name2 = f2['NAME_1']
     print(i, name1, name2)
+    # make map
     mapname = '{}-ADM{}-{}'.format(iso, lvl, i)
     makemap(f1, f2, d2, mapname)
 
