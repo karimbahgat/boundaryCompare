@@ -48,22 +48,32 @@ for iso,group in itertools.groupby(sorted(META, key=key), key=key):
         indics['year'] = sourcestats
     #print(json.dumps(levelstats, indent=4))
 
+# create region lookup
+regions = 'World,Northern America,Latin America and the Caribbean,Europe,Africa,Asia,Oceania'.split(',')
+isoregions = {}
+for iso,group in itertools.groupby(sorted(META, key=key), key=key):
+    reg = list(group)[0]['Continent']
+    isoregions[iso] = reg
+
 # aggregate across countries, so we get level-indic-source
 levelstats = {}
 for level in range(0, 3+1):
     levelstats[level] = indics = {}
-    # lineres
-    indics['lineres'] = sourcestats = {}
-    for src in SOURCES:
-        vals = [_levelstats[level]['lineres'].get(src, None) for _levelstats in countrystats.values()]
-        vals = [float(v) for v in vals if v != None]
-        sourcestats[src] = '{:,.0f} m'.format(np.mean(vals)) if vals else 'NA'
-    # year
-    indics['year'] = sourcestats = {}
-    for src in SOURCES:
-        vals = [_levelstats[level]['year'].get(src, None) for _levelstats in countrystats.values()]
-        vals = [float(v) for v in vals if v not in (None,'Unknown')]
-        sourcestats[src] = '{:.1f}'.format(np.mean(vals)) if vals else 'NA'
+    for regi,reg in enumerate(regions):
+        # lineres
+        indics[f'lineres_{regi}'] = sourcestats = {}
+        for src in SOURCES:
+            vals = [_levelstats[level]['lineres'].get(src, None) for _iso,_levelstats in countrystats.items()
+                    if regi == 0 or isoregions[_iso]==reg]
+            vals = [float(v) for v in vals if v != None]
+            sourcestats[src] = '{:,.0f}'.format(np.mean(vals)) if vals else 'NA'
+        # year
+        indics[f'year_{regi}'] = sourcestats = {}
+        for src in SOURCES:
+            vals = [_levelstats[level]['year'].get(src, None) for _iso,_levelstats in countrystats.items()
+                    if regi == 0 or isoregions[_iso]==reg]
+            vals = [float(v) for v in vals if v not in (None,'Unknown')]
+            sourcestats[src] = '{:.1f}'.format(np.mean(vals)) if vals else 'NA'
 
 # print latex table
 rows = []
@@ -71,10 +81,12 @@ for level,indics in levelstats.items():
     rows.append('\\hline')
     rows.append(f'\\textbf{{ADM{level}}} \\\\')
     for src in SOURCES:
-        indicvals = [indics[indic][src] for indic in ['lineres','year']]
+        indicvals = []
+        for indic in ['lineres','year']:
+            indicvals += [indics[indic+f'_{regi}'][src] for regi,reg in enumerate(regions)]
         valstrings = ' & '.join(indicvals)
-        src = src.replace('_',' ').replace(' (Open)','').replace('SALB','UN SALB').replace('geoBoundaries (Humanitarian)','UN OCHA')
-        row = f'\hspace{{0.3cm}} {src} & {valstrings} \\\\'
+        src = src.replace('_',' ').replace(' (Open)','').replace('SALB','UN SALB').replace('geoBoundaries (Humanitarian)','UN OCHA').replace('OpenStreetMap','OSM')
+        row = f'\hspace{{0.1cm}} {src} & {valstrings} \\\\'
         rows.append(row)
 print('\n'.join(rows))
 
