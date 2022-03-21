@@ -168,3 +168,15 @@ for i,(src,url) in enumerate(sources):
         # make map
         mapname = '{}-ADM{}-{}-{}'.format(iso,lvl,i,i2)
         makemap(d, matches, shared, mapname)
+
+# get row/col totals
+import numpy as np
+mat = np.array([[100, 94.5, 77.0, 81.1],
+                [95.2, 100, 78.9, 81.2],
+                [77.7, 79.1, 100, 95.0],
+                [73.4, 76.3, 86.9, 100]])
+rowtots = [mat[i,:][np.arange(mat.shape[0])!=i].mean() for i in range(mat.shape[0])]
+print('rowtots',rowtots)
+coltots = [mat[:,i][np.arange(mat.shape[1])!=i].mean() for i in range(mat.shape[1])]
+print('coltots',coltots)
+print('final',np.array(rowtots).mean())
