@@ -9,7 +9,8 @@ from urllib.request import urlopen
 import pythongis as pg
 
 # params
-SOURCES = ['geoBoundaries (Open)', 'GADM v3.6', 'OSM-Boundaries', 'SALB', 'geoBoundaries (Humanitarian)', 'Natural Earth v4.1', 'IPUMS']
+BRANCH = 'gadm4'
+SOURCES = ['geoBoundaries (Open)', 'GADM', 'OpenStreetMap', 'SALB', 'OCHA', 'Natural_Earth']
 
 # load country boundaries
 #url = 'https://www.geoboundaries.org/data/geoBoundariesCGAZ-3_0_0/ADM0/simplifyRatio_10/geoBoundariesCGAZ_ADM0.geojson'
@@ -19,7 +20,7 @@ with open('data/gb-countries-simple.json') as r:
     
 # collect stats
 def load_meta():
-    url = 'https://raw.githubusercontent.com/wmgeolab/geoContrast/main/releaseData/geoContrast-meta.csv'
+    url = f'https://raw.githubusercontent.com/wmgeolab/geoContrast/{BRANCH}/releaseData/geoContrast-meta.csv'
     raw = urlopen(url).read().decode('utf8')
     print(len(raw), raw[:100])
     reader = csv.DictReader(raw.split('\n'))
@@ -36,7 +37,7 @@ def get_country_level_stats(iso, level):
                        ]
     if SOURCES:
         countrylevelrows = [r for r in countrylevelrows
-                            if r['boundarySource-1'] in SOURCES]
+                            if r['boundaryCollection'] in SOURCES]
     yrs = [r['boundaryYearRepresented'] for r in countrylevelrows]
     yrs = [int(yr) for yr in yrs if yr != 'Unknown']
     stats = {}

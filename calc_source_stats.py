@@ -9,7 +9,8 @@ import itertools
 from urllib.request import urlopen
 
 # params (note that gbHum = UN OCHA)
-SOURCES = ['geoBoundaries (Open)', 'GADM', 'OpenStreetMap', 'SALB', 'geoBoundaries (Humanitarian)', 'IPUMS', 'Natural_Earth']
+BRANCH = 'gadm4'
+SOURCES = ['geoBoundaries (Open)', 'GADM', 'OpenStreetMap', 'SALB', 'OCHA', 'Natural_Earth']
 
 # load country boundaries
 #url = 'https://www.geoboundaries.org/data/geoBoundariesCGAZ-3_0_0/ADM0/simplifyRatio_10/geoBoundariesCGAZ_ADM0.geojson'
@@ -19,7 +20,7 @@ with open('data/gb-countries-simple.json') as r:
 
 # collect stats
 def load_meta():
-    url = 'https://raw.githubusercontent.com/wmgeolab/geoContrast/main/releaseData/geoContrast-meta.csv'
+    url = f'https://raw.githubusercontent.com/wmgeolab/geoContrast/{BRANCH}/releaseData/geoContrast-meta.csv'
     raw = urlopen(url).read().decode('utf8')
     print(len(raw), raw[:100])
     reader = csv.DictReader(raw.split('\n'))
@@ -65,28 +66,33 @@ for level in range(0, 3+1):
         for src in SOURCES:
             vals = [_levelstats[level]['lineres'].get(src, None) for _iso,_levelstats in countrystats.items()
                     if regi == 0 or isoregions[_iso]==reg]
-            vals = [float(v) for v in vals if v != None]
-            sourcestats[src] = '{:,.0f}'.format(np.mean(vals)) if vals else 'NA'
+            vals = [float(v) for v in vals if v not in (None,'nan')]
+            sourcestats[src] = '{:,.0f}'.format(np.mean(vals)) if vals else '-'
         # year
         indics[f'year_{regi}'] = sourcestats = {}
         for src in SOURCES:
             vals = [_levelstats[level]['year'].get(src, None) for _iso,_levelstats in countrystats.items()
                     if regi == 0 or isoregions[_iso]==reg]
             vals = [float(v) for v in vals if v not in (None,'Unknown')]
-            sourcestats[src] = '{:.1f}'.format(np.mean(vals)) if vals else 'NA'
+            sourcestats[src] = '{:.1f}'.format(np.mean(vals)) if vals else '-'
 
 # print latex table
-rows = []
-for level,indics in levelstats.items():
-    rows.append('\\hline')
-    rows.append(f'\\textbf{{ADM{level}}} \\\\')
-    for src in SOURCES:
-        indicvals = []
-        for indic in ['lineres','year']:
+def print_table(indic):
+    rows = []
+    for level,indics in levelstats.items():
+        rows.append('\\hline')
+        rows.append(f'\\textbf{{ADM{level}}} \\\\')
+        for src in SOURCES:
+            indicvals = []
             indicvals += [indics[indic+f'_{regi}'][src] for regi,reg in enumerate(regions)]
-        valstrings = ' & '.join(indicvals)
-        src = src.replace('_',' ').replace(' (Open)','').replace('SALB','UN SALB').replace('geoBoundaries (Humanitarian)','UN OCHA').replace('OpenStreetMap','OSM')
-        row = f'\hspace{{0.1cm}} {src} & {valstrings} \\\\'
-        rows.append(row)
-print('\n'.join(rows))
+            valstrings = ' & '.join(indicvals)
+            src = src.replace('_',' ').replace(' (Open)','').replace('SALB','UN SALB').replace('geoBoundaries (Humanitarian)','UN OCHA').replace('OpenStreetMap','OSM')
+            row = f'\hspace{{0.1cm}} {src} & {valstrings} \\\\'
+            rows.append(row)
+    print('\n'.join(rows))
 
+print('YEAR')
+print_table('year')
+
+print('\nLINERES')
+print_table('lineres')
