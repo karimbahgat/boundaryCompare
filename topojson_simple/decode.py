@@ -65,10 +65,12 @@ def geometry(obj, topology_arcs, scale=None, translate=None):
     See the coordinates() function for a description of the other three
     parameters.
     """
-    return {
-        "type": obj['type'], 
-        "coordinates": coordinates(
-            obj['arcs'], topology_arcs, scale, translate )}
+    if len(obj['arcs']) > 0:
+        return {
+            "type": obj['type'], 
+            "coordinates": coordinates(
+                obj['arcs'], topology_arcs, scale, translate )}
+
 
 def geojson(topology, name=None):
     """Converts a topology to a geojson collection."""

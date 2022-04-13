@@ -1,7 +1,11 @@
-import numpy as np
-from shapely.geometry import asShape
 from zipfile import ZipFile
 import io
+
+import numpy as np
+# NOTE: must use shape rather than proxy asShape which will be deprecated
+# and lead to repetative warnings
+# https://github.com/shapely/shapely/issues/1207
+from shapely.geometry import shape
 
 import sys
 sys.path.append(r'C:\Users\kimok\Documents\GitHub\geoContrast')
@@ -11,7 +15,7 @@ def get_shapely(feat):
     if 'shapely' in feat:
         return feat['shapely']
     else:
-        return asShape(feat['geometry'])
+        return shape(feat['geometry'])
 
 def get_bbox(feat):
     #if 'shapely' in feat:
@@ -69,20 +73,24 @@ def topo2geoj(data):
     #geoj = serialize_as_geojson(data, objectname=lyr)
     geoj = topojson_simple.decode.geojson(data)
 
+    # ignore null-geom features
+    geoj['features'] = [feat for feat in geoj['features']
+                        if feat['geometry'] != None]
+
     return geoj
 
-def iter_geocontrast_metatable():
+def iter_geocontrast_metatable(branch='stable'):
     from urllib.request import urlopen
     import csv
-    url = 'https://raw.githubusercontent.com/wmgeolab/geoContrast/stable/releaseData/geoContrast-meta.csv'
+    url = f'https://raw.githubusercontent.com/wmgeolab/geoContrast/{branch}/releaseData/geoContrast-meta.csv'
     raw = urlopen(url).read().decode('utf8').split('\n')
     reader = csv.DictReader(raw, delimiter=',')
     for row in reader:
         yield row
 
-def find_geocontrast_sources(iso, level):
+def find_geocontrast_sources(iso, level, branch='stable'):
     sources = {}
-    for row in iter_geocontrast_metatable():
+    for row in iter_geocontrast_metatable(branch=branch):
         if row['boundaryISO'] == iso and row['boundaryType'] == 'ADM{}'.format(level):
             source = row['boundarySource-1']
             apiURL = row['apiURL']
@@ -103,7 +111,7 @@ def load_topojson_url(url, load_shapely=False):
     coll = topo2geoj(topoj)
     if load_shapely:
         for feat in coll['features']:
-            feat['shapely'] = asShape(feat['geometry'])
+            feat['shapely'] = shape(feat['geometry'])
             feat['bbox'] = get_bbox(feat)
     return coll
 
@@ -113,7 +121,7 @@ def load_geojson_url(url, load_shapely=False):
     geoj = json.loads(urlopen(url).read())
     if load_shapely:
         for feat in geoj['features']:
-            feat['shapely'] = asShape(feat['geometry'])
+            feat['shapely'] = shape(feat['geometry'])
             feat['bbox'] = get_bbox(feat)
     return geoj
 
@@ -218,7 +226,6 @@ def show_surface(surf, minval=None, maxval=None, flipy=True, cmap=None):
 
 def show_dataset(data, color_by=None, cmap=None, minval=None, maxval=None, flipy=True):
     import matplotlib.pyplot as plt
-    from shapely.geometry import asShape
     # setup plot
     plt.clf()
     ax = plt.gca()
@@ -250,7 +257,6 @@ def show_dataset(data, color_by=None, cmap=None, minval=None, maxval=None, flipy
 
 def show_datasets(data1, data2, surf=None, bbox=None, minval=None, maxval=None, flipy=True, cmap=None):
     import matplotlib.pyplot as plt
-    from shapely.geometry import asShape
     # setup plot
     plt.clf()
     ax = plt.gca()
@@ -302,7 +308,6 @@ def show_datasets(data1, data2, surf=None, bbox=None, minval=None, maxval=None, 
         
 def show_boundaries(boundaries, surf=None, bbox=None, flipy=True):
     import matplotlib.pyplot as plt
-    from shapely.geometry import asShape
     # setup plot
     plt.clf()
     ax = plt.gca()
@@ -329,14 +334,14 @@ def show_boundaries(boundaries, surf=None, bbox=None, flipy=True):
         #    p = plt.plot(x, y, color=color, linestyle='-.', linewidth=2, label=label) #, marker='o')
         #    color = p[0].get_color()
         # inner
-        inner = asShape(bnd.geom).buffer(-bnd.precision_range_max).__geo_interface__
+        inner = shape(bnd.geom).buffer(-bnd.precision_range_max).__geo_interface__
         for ring in iter_rings(inner):
             ix,iy = zip(*ring)
             label = 'Boundary {}'.format(i+1) if color is None else None # only the first ring gets a label
             p = plt.plot(ix,iy, color=color, linestyle='--', label=label) #, marker='o')
             color = p[0].get_color()
         # outer
-        outer = asShape(bnd.geom).buffer(bnd.precision_range_max).__geo_interface__
+        outer = shape(bnd.geom).buffer(bnd.precision_range_max).__geo_interface__
         for ring in iter_rings(outer):
             ox,oy = zip(*ring)
             plt.plot(ox,oy, color=color, linestyle='--', label="_nolegend") #, marker='o')

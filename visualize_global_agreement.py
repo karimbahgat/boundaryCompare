@@ -8,6 +8,9 @@ import csv
 from urllib.request import urlopen
 import pythongis as pg
 
+# params
+BRANCH = 'gadm4'
+
 # load country boundaries
 #url = 'https://www.geoboundaries.org/data/geoBoundariesCGAZ-3_0_0/ADM0/simplifyRatio_10/geoBoundariesCGAZ_ADM0.geojson'
 #geoj = boundarytools.utils.load_geojson_url(url)
@@ -16,7 +19,7 @@ with open('data/gb-countries-simple.json') as r:
     
 # collect stats
 def load_meta():
-    url = 'https://raw.githubusercontent.com/wmgeolab/geoContrast/main/releaseData/geoContrast-meta.csv'
+    url = f'https://raw.githubusercontent.com/wmgeolab/geoContrast/{BRANCH}/releaseData/geoContrast-meta.csv'
     raw = urlopen(url).read().decode('utf8')
     print(len(raw), raw[:100])
     reader = csv.DictReader(raw.split('\n'))
@@ -116,4 +119,4 @@ for level in range(0, 4+1):
              )#reverse_colors=True)
 
 
-    
+

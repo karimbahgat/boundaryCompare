@@ -3,8 +3,8 @@ import boundarytools
 import numpy as np
 from pyproj import Geod
 geod = Geod(ellps="WGS84")
-from shapely.geometry import asShape
-#from shapely.validation import make_valid
+from shapely.geometry import shape
+from shapely.validation import make_valid
 
 import os
 import sys
@@ -19,15 +19,22 @@ import tempfile
 
 # params
 
+BRANCH = 'gadm4'
 OUTPUT_DIR = 'global_relations'
-SOURCES = ['geoBoundaries (Open)', 'GADM v3.6', 'OSM-Boundaries', 'SALB', 'geoBoundaries (Humanitarian)', 'Natural Earth v4.1', 'IPUMS']
+SOURCES = ['geoBoundaries (Open)', 'GADM v4.0.4', 'OSM-Boundaries', 'UN SALB', 'OCHA', 'Natural Earth v5.0.1']
 IGNORE_SOURCES = []
 MAXPROCS = 2
-COUNTRIES = ['CAN','NOR']
+COUNTRIES = [] #'CAN','CHL']
+
+
+def source_in_sources(source, sources):
+    # to allow for some variation, match if source matches the beginning of any in sources
+    matches = (source.startswith(comp) for comp in sources)
+    return any(matches)
 
 
 def loop_country_levels():
-    url = 'https://raw.githubusercontent.com/wmgeolab/geoContrast/stable/releaseData/geoContrast-meta.csv'
+    url = f'https://raw.githubusercontent.com/wmgeolab/geoContrast/{BRANCH}/releaseData/geoContrast-meta.csv'
     raw = urlopen(url).read().decode('utf8')
     reader = csv.DictReader(raw.split('\n'))
     def key(row):
@@ -39,32 +46,73 @@ def loop_country_levels():
 
 def get_country_level_areas(country, level):
     # first get all possible sources
-    sourcedict = boundarytools.utils.find_geocontrast_sources(country, level)
+    sourcedict = boundarytools.utils.find_geocontrast_sources(country, level, branch=BRANCH)
+    sourcedict = dict([(s,u.replace('/stable/',f'/{BRANCH}/')) for s,u in sourcedict.items()]) # override with chosen branch
     print('available sources:', sourcedict.keys())
 
     # define how to load and prep each source 
     def load_source(url):
         print('loading', url)
         coll = boundarytools.utils.load_topojson_url(url, load_shapely=True)
+        
         # delete geojson repr to reduce memory (only need shapely)
         for feat in coll['features']:
             del feat['geometry']
-        # simplify
-        print('simplifying')
+
+        # simplify and validate
+        print('simplifying and validating')
         for feat in coll['features']:
-            feat['shapely'] = feat['shapely'].simplify(0.01, True) # ca 1km
+            # simplify
+            simplified = feat['shapely'].simplify(0.01, True) # ca 1km
+
+            # try simple fix if invalid
+            if not simplified.is_valid:
+                simplified = simplified.buffer(0)
+
+            # try again if the fix didn't work (eg buffer 0 can lead to empty geom)
+            if not simplified.is_valid or simplified.is_empty:
+                # original shape was probably invalid
+                # force validate
+                shp = feat['shapely']
+                shp = make_valid(shp)
+
+                # fix by splitting original into linestring and polygonizing the lines
+                #simplified = feat['shapely']
+                #if simplified.geom_type == 'MultiPolygon':
+                #    polys = simplified.geoms
+                #else:
+                #    polys = [simplified]
+                #lines = []
+                #for poly in polys:
+                #    for ring in [poly.exterior] + list(poly.interiors):
+                #        line = ring
+                #        lines.append(line)
+                        
+                # then extract only the valid polygons from these lines
+                #polys = polygonize(lines)
+                #simplified = MultiPolygon(polys)
+                #simplified = simplified
+
+                # simplify the validated geom
+                simplified = shp.simplify(0.01, True) # ca 1km
+
+            # overwrite with simplified geom
+            assert simplified.is_valid and not simplified.is_empty and simplified.geom_type != 'GeometryCollection'
+            feat['shapely'] = simplified
+
         # validating
-        print('validating')
-        for feat in coll['features']:
-            if not feat['shapely'].is_valid:
-                feat['shapely'] = feat['shapely'].buffer(0)
+        #print('validating')
+        #for feat in coll['features']:
+        #    if not feat['shapely'].is_valid:
+        #        feat['shapely'] = feat['shapely'].buffer(0)
+        #        assert not feat['shapely'].is_empty
         return coll
 
     # download and prep all sources in local temp files
     print('downloading and prepping all source data')
     localfiles = {}
     for source,url in sourcedict.items():
-        if SOURCES and source not in SOURCES: continue
+        if SOURCES and not source_in_sources(source, SOURCES): continue
         elif source in IGNORE_SOURCES: continue
         print('-->', source)
         coll = load_source(url)
@@ -80,7 +128,7 @@ def get_country_level_areas(country, level):
         tmp.seek(0)
         coll = json.loads(tmp.read())
         for f in coll['features']:
-            f['shapely'] = asShape(f['geometry'])
+            f['shapely'] = shape(f['geometry'])
         return coll
 
     # calc relations bw all pairs of sources
@@ -89,7 +137,7 @@ def get_country_level_areas(country, level):
     source_errors_matrix = {}
     #for source1,coll1 in sourcedata.items():
     for source1,url1 in sourcedict.items():
-        if SOURCES and source1 not in SOURCES: continue
+        if SOURCES and not source_in_sources(source1, SOURCES): continue
         elif source1 in IGNORE_SOURCES: continue
         print('-->', source1)
         coll1 = load_local_source(url1)
@@ -107,7 +155,7 @@ def get_country_level_areas(country, level):
         for source2,url2 in sourcedict.items():
             if source2 == source1: continue
 
-            if SOURCES and source2 not in SOURCES: continue
+            if SOURCES and not source_in_sources(source2, SOURCES): continue
             elif source2 in IGNORE_SOURCES: continue
             print('-->', source1, 'vs', source2)
             coll2 = load_local_source(url2)
