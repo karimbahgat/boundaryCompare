@@ -9,6 +9,7 @@ from urllib.request import urlopen
 import pythongis as pg
 
 # params
+branch = 'gadm4'
 iso = 'MWI'
 
 # identify possible
@@ -40,7 +41,7 @@ def makemap(geoj, source, level):
 
     crs = '+proj=aea +lat_1=27 +lat_2=45 +lat_0=35 +lon_0=105 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +no_defs'
     
-    m = pg.renderer.Map(1200,1000,background='white') #,crs=crs)
+    m = pg.renderer.Map(1000,1000,background='white') #,crs=crs)
     m.add_layer(countries, fillcolor='lightgray', outlinewidth='0.5px')
     
     d = pg.VectorData()
@@ -56,8 +57,11 @@ def makemap(geoj, source, level):
 # load china sources
 for lvl in range(1, 3+1):
     print(lvl)
-    sources = bt.utils.find_geocontrast_sources(iso, lvl)
+    sources = bt.utils.find_geocontrast_sources(iso, lvl, branch=branch)
     for src,url in sources.items():
+        if 'Authoritative' in src: 
+            continue
+        url = url.replace('/stable/', f'/{branch}/')
         geoj = bt.utils.load_topojson_url(url)
         makemap(geoj, src, lvl)
 
