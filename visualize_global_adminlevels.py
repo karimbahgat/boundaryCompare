@@ -6,10 +6,12 @@ import numpy as np
 import math
 import csv
 from urllib.request import urlopen
+import itertools
 import pythongis as pg
 
 # params
-SOURCES = ['geoBoundaries (Open)', 'GADM v3.6', 'OSM-Boundaries', 'SALB', 'geoBoundaries (Humanitarian)', 'Natural Earth v4.1', 'IPUMS']
+BRANCH = 'gadm4'
+SOURCES = ['geoBoundaries (Open)', 'GADM', 'OpenStreetMap', 'SALB', 'OCHA', 'Natural_Earth']
 
 # load country boundaries
 #url = 'https://www.geoboundaries.org/data/geoBoundariesCGAZ-3_0_0/ADM0/simplifyRatio_10/geoBoundariesCGAZ_ADM0.geojson'
@@ -19,32 +21,84 @@ with open('data/gb-countries-simple.json') as r:
     
 # collect stats
 def load_meta():
-    url = 'https://raw.githubusercontent.com/wmgeolab/geoContrast/main/releaseData/geoContrast-meta.csv'
+    url = f'https://raw.githubusercontent.com/wmgeolab/geoContrast/{BRANCH}/releaseData/geoContrast-meta.csv'
     raw = urlopen(url).read().decode('utf8')
     print(len(raw), raw[:100])
     reader = csv.DictReader(raw.split('\n'))
     return list(reader)
       
 META = load_meta()
+
+def calc_source_level_matches(level, countryrows):
+    # admin matching algorithm
+    # for iso,level
+    #   for each reference source
+    #     for each comparison source
+    #       find the comparison level that's closest to the reference
+    #       eg gadm1=13, vs salb0=1, salb1=10 (MATCH), salb2=25
+    #       if the closest comparison has same level as reference, set dummy to 1
+    #   calc percentage of all source combinations considered to be same level (share of dummies)
+    key = lambda r: r['boundaryCollection']
+    sourcegroups = {src:list(group)
+                    for src,group in itertools.groupby(sorted(countryrows, key=key), key=key)
+                    }
+
+    match_matrix = {}
+    for src1,group1 in sourcegroups.items():
+        match_row = {}
+        match_matrix[src1] = match_row
+
+        row_at_level = None
+        for r in group1:
+            if r['boundaryType']=='ADM{}'.format(level):
+                row_at_level = r
+
+        if not row_at_level:
+            continue
+
+        for src2,group2 in sourcegroups.items():
+            if src1 == src2: continue
+            levelcounts = [(r['boundaryType'],int(r['boundaryCount']))
+                            for r in group2]
+            if not f'ADM{level}' in [r['boundaryType'] for r in group2]:
+                # it must be possible to match with comparison source 
+                # ie, both must have data for the same admin level
+                continue
+            key = lambda r: abs( int(row_at_level['boundaryCount']) - r[1] )
+            nearest_match = sorted(levelcounts, key=key)[0]
+            match_at_same_level = f'ADM{level}' == nearest_match[0]
+            match_row[src2] = match_at_same_level
     
+    return match_matrix
+
 def get_country_level_stats(iso, level):
     # open source pair stats
-    countrylevelrows = [r
-                        for r in META
-                        if r['boundaryISO']==iso
-                        and r['boundaryType']=='ADM{}'.format(level)
-                       ]
+    countryrows = [r
+                    for r in META
+                    if r['boundaryISO']==iso
+                    ]
     if SOURCES:
-        countrylevelrows = [r for r in countrylevelrows
-                            if r['boundarySource-1'] in SOURCES]
-    lineres = [r['boundaryCount'] for r in countrylevelrows]
-    lineres = [float(v) for v in lineres if v != 'Unknown']
-    lineres = [v for v in lineres if not math.isnan(v)]
+        countryrows = [r for r in countryrows
+                            if r['boundaryCollection'] in SOURCES]
     stats = {}
-    stats['admincounts_list'] = lineres
-    stats['admincounts_mean'] = np.mean(lineres) if lineres else None
-    stats['admincounts_std'] = np.std(lineres) if lineres else None
-    stats['admincounts_stdperc'] = (stats['admincounts_std']/stats['admincounts_mean'])*100 if lineres else None
+    match_matrix = calc_source_level_matches(level, countryrows)
+    print(match_matrix)
+    vals = [v for row in match_matrix.values() for v in row.values()]
+    stats['percent_admincount_same_level'] = np.mean(vals) * 100 if vals else None
+    print(iso, level, stats)
+
+    #if iso=='DZA' and level == 2:
+    #    x=1 # set breakpoint here for debugging
+
+    #counts = [r['boundaryCount'] for r in countryrows]
+    #counts = [float(v) for v in counts if v != 'Unknown']
+    #counts = [v for v in counts if not math.isnan(v)]
+    #stats = {}
+    #stats['admincounts_list'] = counts
+    #stats['admincounts_mean'] = np.mean(counts) if counts else None
+    #stats['admincounts_std'] = np.std(counts) if counts else None
+    #stats['admincounts_stdperc'] = (stats['admincounts_std']/stats['admincounts_mean'])*100 if counts else None
+
     return stats
       
 # collect for each level
@@ -62,11 +116,7 @@ for f in geoj['features']:
         # special stats comparing 
             
 # some figure configs
-import matplotlib.pyplot as plt
-plt.rcParams['axes.grid'] = False
-plt.rcParams['lines.linewidth'] = 0.5
-
-breaks = 'natural'
+breaks = [0,25,50,75,95,100] #'natural'
 classes = 5
 colors = [(146,3,85), (230,230,230), (45,107,26)] # ['red','white','green']
 
@@ -96,21 +146,13 @@ def save_map(geoj, color_by, title, output, reverse_colors=False):
     m.add_legend({'fillcolor':None,'outlinecolor':None})#, xy=('50%w','99%h'), anchor='s')
     m.save(output)
             
-# visualize country year stdev
+# visualize country admin match percentage
 for level in range(0, 4+1):
     print(level)
-    save_map(geoj, 'admincounts_mean{}'.format(level),
-             'ADM{} Average\n# of Divisions'.format(level),
-             'figures/bcount_mean{}.png'.format(level),
-             reverse_colors=True)
-    save_map(geoj, 'admincounts_std{}'.format(level),
-             'ADM{} Variation in\n# of Divisions'.format(level),
-             'figures/bcount_std{}.png'.format(level),
-             reverse_colors=True)
-    save_map(geoj, 'admincounts_stdperc{}'.format(level),
-             'ADM{} Variation in\n# of Divisions (%)'.format(level),
-             'figures/bcount_stdperc{}.png'.format(level),
-             reverse_colors=True)
+    save_map(geoj, 'percent_admincount_same_level{}'.format(level),
+             'ADM{} Same Level\nAcross Sources (%)'.format(level),
+             'figures/bcount_match{}.png'.format(level),
+             reverse_colors=False)
     
 
 
