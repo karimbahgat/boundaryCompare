@@ -8,6 +8,11 @@ import csv
 from urllib.request import urlopen
 import pythongis as pg
 
+# params
+branch = 'gadm4'
+iso = 'TCD'
+lvl = 2
+
 # load country boundaries
 #url = 'https://www.geoboundaries.org/data/geoBoundariesCGAZ-3_0_0/ADM0/simplifyRatio_10/geoBoundariesCGAZ_ADM0.geojson'
 #geoj = boundarytools.utils.load_geojson_url(url)
@@ -55,11 +60,11 @@ def makemap(geoj, country, source, level):
 ##    geoj = bt.utils.load_topojson_url(url)
 ##    makemap(geoj, iso, src, lvl)
 
-# load cote divoire sources
-iso,lvl = 'CIV', 1
-sources = bt.utils.find_geocontrast_sources(iso, lvl)
+# load country sources
+sources = bt.utils.find_geocontrast_sources(iso, lvl, branch=branch)
 for src,url in sources.items():
-    if src == 'OSM-Boundaries': continue
+    #if src == 'OSM-Boundaries': continue
+    url = url.replace('/stable/', f'/{branch}/')
     geoj = bt.utils.load_topojson_url(url)
     makemap(geoj, iso, src, lvl)
 
