@@ -212,6 +212,7 @@ def makemap(geoj, geoj2, zoomfunc, zoomfunc2, name):
     #crs = '+proj=aea +lat_1=27 +lat_2=45 +lat_0=35 +lon_0=105 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +no_defs'
     
     m = pg.renderer.Map(1200,1000,background='lightgray') #,crs=crs)
+    textoptions = {'textsize': 15}
 
     # countries? 
     #m.add_layer(countries, fillcolor='lightgray', outlinewidth='0.5px')
@@ -222,8 +223,8 @@ def makemap(geoj, geoj2, zoomfunc, zoomfunc2, name):
     for f in geoj['features']:
         d.add_feature(f['properties'], f['geometry'])
     d = d.select(zoomfunc)
-    m.add_layer(d, fillcolor=(222,222,255,55), outlinecolor='blue', outlinewidth='3px', legend=False)
-    m.add_layer(d.convert.to_points('vertex'), fillcolor='blue', fillsize='5px', outlinecolor=None, legendoptions={'title':'geoBoundaries'})
+    m.add_layer(d, fillcolor=None, outlinecolor='blue', outlinewidth='10px', legend=False)
+    m.add_layer(d.convert.to_points('vertex'), fillcolor='blue', fillsize='14px', outlinecolor=None, legendoptions={'title':'geoBoundaries'})
 
     # source2
     d = pg.VectorData()
@@ -231,17 +232,25 @@ def makemap(geoj, geoj2, zoomfunc, zoomfunc2, name):
     for f in geoj2['features']:
         d.add_feature(f['properties'], f['geometry'])
     d = d.select(zoomfunc2)
-    m.add_layer(d, fillcolor=None, outlinecolor='red', outlinewidth='3px', legend=False)
-    m.add_layer(d.convert.to_points('vertex'), fillcolor='red', fillsize='5px', outlinecolor=None, legendoptions={'title':'Natural Earth'})
+    m.add_layer(d, fillcolor=None, outlinecolor='red', outlinewidth='10px', legend=False)
+    m.add_layer(d.convert.to_points('vertex'), fillcolor='red', fillsize='14px', outlinecolor=None, legendoptions={'title':'Natural Earth'})
     
     # zoom
     m.zoom_auto()
     #m.zoom_out(1.1)
     #m.zoom_in(3)
-    m.offset('-35%w', '30%h')
+
+    # old
+    #m.offset('-35%w', '30%h')
+    #m.zoom_in(3)
+    #m.offset('-33%w', 0)
+    #m.zoom_in(3.5)
+
+    # new
+    #m.offset('8%w', '-2%h')
+    m.offset('-8%w', '-4%h')
     m.zoom_in(3)
-    m.offset('-33%w', 0)
-    m.zoom_in(3.5)
+    m.zoom_in(2)
 
     # add satellite base layer
     bbox = m.bbox
@@ -277,7 +286,8 @@ def makemap(geoj, geoj2, zoomfunc, zoomfunc2, name):
     # add satellite base layer for new zoom
     bbox = m.bbox
     print(bbox)
-    for sat in get_sat_tiles(m):
+    import tiler
+    for sat,footprint in tiler.get_sat_tiles(m):
     #for sat in get_sat(bbox, padding=0.1):
     #for sat in [pg.RasterData('temp/localsat.tif')]: 
         #for b in sat.bands:
@@ -293,7 +303,7 @@ def makemap(geoj, geoj2, zoomfunc, zoomfunc2, name):
 iso,lvl = 'ETH', 1
 sources = bt.utils.find_geocontrast_sources(iso, lvl)
 geoj = bt.utils.load_topojson_url(sources['geoBoundaries (Open)'])
-geoj2 = bt.utils.load_topojson_url(sources['Natural Earth v4.1'])
+geoj2 = bt.utils.load_topojson_url(sources['Natural Earth v5.0.1'])
 zoomfunc = lambda f: f['shapeName']=='Tigray'
 zoomfunc2 = lambda f: f['name']=='Tigray'
 name = '{}-{}-Tigray-gB vs NE'.format(iso, lvl)
